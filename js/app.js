@@ -5,6 +5,7 @@
 
 import { DEFAULT_AGENTS, PHASES, PHASE_AGENTS, THE_CHAIR } from './agents.js';
 import { seedAgentsIfEmpty, getAll, get, getSetting } from './db.js';
+import { escapeHtml } from './markdown.js';
 import * as DashboardView from './views/dashboard.js';
 import * as VentureView from './views/venture.js';
 import * as AgentsView from './views/agents.js';
@@ -136,7 +137,7 @@ async function navigate() {
       console.error('View render error:', err);
       root.innerHTML = `
         <div class="panel p-6 border-danger/40 bg-danger/10 text-danger text-sm">
-          <strong>Error rendering view:</strong> ${err.message}
+          <strong>Error rendering view:</strong> ${escapeHtml(err.message || 'Unknown error')}
         </div>
       `;
     }

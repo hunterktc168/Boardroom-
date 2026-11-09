@@ -128,7 +128,7 @@ export function formatPriorAgentReplies(priorAgentReplies) {
   if (Array.isArray(priorAgentReplies)) {
     if (priorAgentReplies.length === 0) return '';
     const names = priorAgentReplies.map(p => p.agentName || p.author || 'Director').join(', ');
-    const text = priorAgentReplies.map(p => `[${p.agentName || p.author} (${p.shortRole || 'Director'})]:\n${p.content || p.text || ''}`).join('\n\n');
+    const text = priorAgentReplies.map(p => `[${p.agentName || p.author || 'Director'} (${p.shortRole || 'Director'})]:\n${p.content || p.text || ''}`).join('\n\n');
     return `\n\n=== RECENT DIRECTORS' REMARKS IN THIS ROUND ===\n${text}\n\n=== MULTI-AGENT ROUNDTABLE DIRECTIVE ===\nYou have just heard from ${names}. Build on, disagree with, or sharpen their points by name. Do not repeat them.`;
   }
   return `\n\n=== RECENT DIRECTORS' REMARKS ===\n${priorAgentReplies}`;

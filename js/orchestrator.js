@@ -204,6 +204,9 @@ export async function regenerateLastAgentReply({
     }
   }
 
+  const previousReplyIdx = lastAgentIdx;
+  const previousReply = lastAgentIdx !== -1 ? msgs[lastAgentIdx] : null;
+
   if (lastAgentIdx !== -1) {
     msgs.splice(lastAgentIdx, 1);
   }
@@ -269,7 +272,11 @@ export async function regenerateLastAgentReply({
       if (onChunk) onChunk(agentMsg.id, agentMsg.text);
     } else {
       if (!agentMsg.text) {
-        session.messages.pop();
+        // Roll back the empty placeholder and restore the previous reply so a failed
+        // regeneration never destroys the existing answer.
+        const placeholderIdx = session.messages.indexOf(agentMsg);
+        if (placeholderIdx !== -1) session.messages.splice(placeholderIdx, 1);
+        if (previousReply) session.messages.splice(previousReplyIdx, 0, previousReply);
         await put('sessions', session);
       }
       if (onAgentSpeakingChange) onAgentSpeakingChange(agent.id, false);
@@ -885,22 +892,33 @@ export async function synthesizePhaseDeliverable({
     }
   } catch (err) {
     if (err.name === 'AbortError' || signal?.aborted) {
-      if (!fullContent) {
-        fullContent = '# Synthesis Interrupted\n\nThe Chair synthesis was stopped before completion.';
-      }
-    } else {
-      console.error('Synthesis error:', err);
-      fullContent += `\n\n*[Synthesis error: ${err.message}]*`;
+      // The founder stopped synthesis. Do NOT ratify the milestone or persist a
+      // partial deliverable — leave the venture state exactly as it was.
+      throw new DOMException('Synthesis stopped by user', 'AbortError');
     }
+    // Provider/network failure: surface it and leave venture state untouched so a
+    // failed synthesis can never mark the phase complete or pollute board memory.
+    console.error('Synthesis error:', err);
+    throw err;
   }
 
+  if (!fullContent.trim()) {
+    throw new Error('Synthesis produced no content; the milestone was not ratified.');
+  }
+
+  // Upsert: re-synthesizing the same phase must replace the existing memo rather
+  // than accumulate duplicate deliverable records.
+  const existingDeliverables = await getAll('deliverables');
+  const existing = existingDeliverables.find(d => d.ventureId === venture.id && d.phase === phase.id);
+
   const deliverable = {
-    id: `deliv_${venture.id}_${phase.id}_${Date.now()}`,
+    id: existing?.id || `deliv_${venture.id}_${phase.id}_${Date.now()}`,
     ventureId: venture.id,
     phase: phase.id,
     title: `${targetDeliverable} — ${venture.name}`,
     content: fullContent,
-    createdAt: Date.now()
+    createdAt: existing?.createdAt || Date.now(),
+    updatedAt: Date.now()
   };
 
   await put('deliverables', deliverable);
@@ -910,9 +928,13 @@ export async function synthesizePhaseDeliverable({
     venture.completedPhases.push(phase.id);
   }
 
-  const memoryStamp = `[Phase 0${phase.number}: ${phase.label} Milestone Concluded]\nDeliverable: ${targetDeliverable}.\nBoard consensus reached on core stage-gate criteria. Actionable directives logged for founder execution.`;
+  const memoryMarker = `[Phase 0${phase.number}: ${phase.label} Milestone Concluded]`;
+  const memoryStamp = `${memoryMarker}\nDeliverable: ${targetDeliverable}.\nBoard consensus reached on core stage-gate criteria. Actionable directives logged for founder execution.`;
   if (venture.boardMemory && venture.boardMemory.trim()) {
-    venture.boardMemory = `${venture.boardMemory.trim()}\n\n${memoryStamp}`;
+    // Guard against stamping the same phase milestone into board memory twice.
+    if (!venture.boardMemory.includes(memoryMarker)) {
+      venture.boardMemory = `${venture.boardMemory.trim()}\n\n${memoryStamp}`;
+    }
   } else {
     venture.boardMemory = memoryStamp;
   }

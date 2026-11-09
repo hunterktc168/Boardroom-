@@ -420,6 +420,7 @@ function wireSettingsEvents(container, defaultsByProvider) {
       if (modelVal) await setSetting('anthropic_model', modelVal);
     } else if (selectedProvider === 'gemini') {
       await setSetting('gemini_api_key', keyVal);
+      if (baseUrlVal) await setSetting('gemini_base_url', baseUrlVal);
       if (modelVal) await setSetting('gemini_model', modelVal);
     }
 

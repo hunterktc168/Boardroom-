@@ -995,13 +995,21 @@ function wireBoardroomChamber({
   let activeAbortController = null;
   let isGenerating = false;
   let lastUserText = '';
+  // Number of messages currently present in the DOM transcript. The initial shell
+  // rendered the session's existing messages, so seed it from the initial session.
+  let renderedCount = (initialSession.messages || []).length;
 
   // Roundtable room participants & speaking sequence state
   let roomParticipants = phaseAgents.map(a => ({ ...a, enabled: true }));
   const sessionControl = { pauseAfterCurrent: false, isStopped: false, skipToChair: false };
 
   const textarea = document.getElementById('composer-textarea');
-  const sendBtn = document.getElementById('composer-send-btn');
+  // NOTE: sendBtn and composerFooterHint live inside #composer-actions-bar, whose
+  // innerHTML is rebuilt by showInSessionUI()/restoreSendButton(). These references
+  // must be re-queried after each rebuild, so they are declared with `let` and
+  // reassigned in restoreSendButton().
+  let sendBtn = document.getElementById('composer-send-btn');
+  let composerFooterHint = document.getElementById('composer-footer-hint');
   const transcriptFeed = document.getElementById('transcript-feed');
   const messageCountBadge = document.getElementById('message-count-badge');
   const actionsBar = document.getElementById('composer-actions-bar');
@@ -1016,7 +1024,6 @@ function wireBoardroomChamber({
   const inlineAgentPicker = document.getElementById('inline-agent-picker');
   const transcriptHeaderTitle = document.getElementById('transcript-header-title');
   const transcriptModeBadge = document.getElementById('transcript-mode-badge');
-  const composerFooterHint = document.getElementById('composer-footer-hint');
 
   // Auto-grow textarea
   textarea?.addEventListener('input', () => {
@@ -1336,6 +1343,7 @@ function wireBoardroomChamber({
       wireTranscriptActions();
     }
 
+    renderedCount = msgs.length;
     transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
 
     if (messageCountBadge) {
@@ -1435,7 +1443,11 @@ function wireBoardroomChamber({
           </button>
         </div>
       `;
-      document.getElementById('composer-send-btn')?.addEventListener('click', () => {
+      // The rebuild above replaced the DOM nodes, so re-query the cached refs
+      // before wiring, otherwise we hold detached nodes and the label/hint freeze.
+      sendBtn = document.getElementById('composer-send-btn');
+      composerFooterHint = document.getElementById('composer-footer-hint');
+      sendBtn?.addEventListener('click', () => {
         if (!isGenerating) triggerSend();
       });
     }
@@ -1586,7 +1598,11 @@ function wireBoardroomChamber({
   function appendMessageBubble(msg) {
     if (!transcriptFeed) return;
 
-    if ((activeSession.messages || []).length <= 2) {
+    // If the transcript is missing more than this single new message — e.g. the
+    // founder's turn that was just persisted alongside this agent placeholder — do a
+    // full re-render so no message is silently skipped. (Incremental append is only
+    // safe when exactly one message is new.)
+    if ((activeSession.messages || []).length !== renderedCount + 1) {
       renderFeed();
       return;
     }
@@ -1594,6 +1610,7 @@ function wireBoardroomChamber({
     const bubbleHtml = renderMessageBubble(msg, currentPhase);
     transcriptFeed.insertAdjacentHTML('beforeend', bubbleHtml);
     transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+    renderedCount = (activeSession.messages || []).length;
 
     if (messageCountBadge) {
       messageCountBadge.textContent = `${activeSession.messages.length} remarks`;
@@ -1657,6 +1674,14 @@ function wireBoardroomChamber({
     const retryBtn = transcriptFeed.querySelector('.retry-chat-btn');
     retryBtn?.addEventListener('click', () => {
       document.querySelector('.inline-error-bubble')?.remove();
+      // The failed attempt already persisted the founder turn (and possibly a partial
+      // agent reply). Drop those trailing messages so retrying re-runs the turn
+      // without duplicating the founder's message.
+      const msgs = activeSession.messages || [];
+      while (msgs.length && msgs[msgs.length - 1].role !== 'user') msgs.pop();
+      if (msgs.length && msgs[msgs.length - 1].role === 'user' && msgs[msgs.length - 1].text === originalText) {
+        msgs.pop();
+      }
       triggerSend(originalText);
     });
   }
@@ -1946,8 +1971,25 @@ function wireSynthesisTriggers(venture, currentPhase, activeSession) {
       window.dispatchEvent(new CustomEvent('boardroom:sync'));
 
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('Synthesis failed:', err);
+      if (err.name === 'AbortError') {
+        // The founder stopped synthesis; the Stop button already closed the modal.
+        return;
+      }
+      console.error('Synthesis failed:', err);
+      // Surface the failure instead of leaving the modal stuck on "Synthesizing".
+      if (streamIndicator) streamIndicator.classList.add('hidden');
+      if (statusChip) {
+        statusChip.textContent = '✕ Synthesis Failed';
+        statusChip.className = 'chip text-[10px] py-0 px-2 bg-danger/20 text-danger border-danger/40 uppercase font-mono';
+      }
+      if (stopBtn) stopBtn.classList.add('hidden');
+      if (doneBtn) doneBtn.classList.remove('hidden');
+      if (streamContent) {
+        streamContent.innerHTML += `
+          <div class="mt-3 p-3 rounded-lg border border-danger/40 bg-danger/5 text-xs text-danger leading-relaxed">
+            Synthesis failed: ${escapeHtml(err.message || 'Unknown error')}. The milestone was not ratified — you can retry.
+          </div>
+        `;
       }
     }
   }

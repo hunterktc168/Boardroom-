@@ -10,6 +10,9 @@ import { DEFAULT_AGENTS, THE_CHAIR, getAgent } from '../agents.js';
 import { getAll, getSetting, put, resetAgentsToDefault, seedAgentsIfEmpty } from '../db.js';
 
 let selectedAgent = null;
+// Tracks the document-level Escape handler so it can be removed before re-binding
+// on each render (render() runs repeatedly; without this, handlers accumulate).
+let escapeKeyHandler = null;
 
 export async function render(container, params = {}) {
   // Update Topbar action slot
@@ -172,6 +175,8 @@ export async function render(container, params = {}) {
       <div id="agent-modal-content" class="panel max-w-2xl w-full max-h-[90vh] overflow-y-auto border-subtle shadow-2xl animate-fadeIn p-6 sm:p-8 space-y-6" onclick="event.stopPropagation()">
         <!-- Modal body injected dynamically -->
       </div>
+    </div>
+
     <!-- Reset Roster Confirmation Modal -->
     <div id="reset-roster-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
       <div class="panel max-w-md w-full border-danger/40 p-6 space-y-4" onclick="event.stopPropagation()">
@@ -232,8 +237,11 @@ function wireEventListeners(container, agents) {
     });
   }
 
-  // Agent Card clicks for inspection
-  const cards = container.querySelectorAll('[data-agent-id]');
+  // Agent Card clicks for inspection.
+  // Scope to the card panel only: a bare [data-agent-id] selector would also match
+  // the enable/disable <input> (which carries the same attribute) and open the drawer
+  // every time a director is toggled.
+  const cards = container.querySelectorAll('.panel[data-agent-id]');
   cards.forEach(card => {
     card.addEventListener('click', () => {
       const id = card.getAttribute('data-agent-id');
@@ -278,9 +286,11 @@ function wireEventListeners(container, agents) {
     backdrop.addEventListener('click', closeAgentDrawer);
   }
 
-  document.addEventListener('keydown', (e) => {
+  if (escapeKeyHandler) document.removeEventListener('keydown', escapeKeyHandler);
+  escapeKeyHandler = (e) => {
     if (e.key === 'Escape') closeAgentDrawer();
-  });
+  };
+  document.addEventListener('keydown', escapeKeyHandler);
 }
 
 /**

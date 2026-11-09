@@ -12,6 +12,27 @@
 import { getSetting } from './db.js';
 
 /**
+ * Read an error body safely. The response body can only be consumed once, so we
+ * read it as text first and then attempt to parse JSON from that text. (Calling
+ * response.json() and then response.text() in a catch would throw "body already
+ * read" on non-JSON error pages.)
+ */
+async function readErrorBody(response) {
+  let raw = '';
+  try {
+    raw = await response.text();
+  } catch (e) {
+    return response.statusText || 'Unknown error';
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed?.error?.message || response.statusText || raw;
+  } catch (e) {
+    return raw.trim() || response.statusText || 'Unknown error';
+  }
+}
+
+/**
  * Format messages for OpenAI compatibility
  */
 function formatOpenAIMessages(system, messages = []) {
@@ -85,8 +106,8 @@ async function* parseSSEStream(response, onDataChunk, signal) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith(':')) continue;
 
-        if (trimmed.startsWith('data: ')) {
-          const dataStr = trimmed.slice(6).trim();
+        if (trimmed.startsWith('data:')) {
+          const dataStr = trimmed.slice(5).trim();
           if (dataStr === '[DONE]') {
             return;
           }
@@ -99,14 +120,21 @@ async function* parseSSEStream(response, onDataChunk, signal) {
     }
 
     // Leftover buffer
-    if (buffer.trim().startsWith('data: ')) {
-      const dataStr = buffer.trim().slice(6).trim();
+    if (buffer.trim().startsWith('data:')) {
+      const dataStr = buffer.trim().slice(5).trim();
       if (dataStr && dataStr !== '[DONE]') {
         const textChunk = onDataChunk(dataStr);
         if (textChunk) yield textChunk;
       }
     }
   } finally {
+    // Cancel the underlying HTTP stream when the consumer stops early (e.g. the
+    // user hits Stop) so the connection isn't left open streaming in the background.
+    try {
+      await reader.cancel();
+    } catch (e) {
+      // Stream already closed or errored; nothing to clean up.
+    }
     reader.releaseLock();
   }
 }
@@ -173,7 +201,7 @@ export class MockProvider {
     // 1. Validation Challenge Target (David interrogating another director's remark)
     if (meta?.action === 'challenge' || (system && system.includes('CLAIM UNDER INTERROGATION'))) {
       const claimText = meta?.claimText || meta?.challengedText || 'the stated assumption';
-      const speaker = meta?.agentName || meta?.challengedSpeaker || 'the prior speaker';
+      const speaker = meta?.agentName || meta?.targetSpeaker || meta?.challengedSpeaker || 'the prior speaker';
       return `### Validation Interrogation — David Okafor
 
 > *Interrogating statement by ${speaker}:*  
@@ -444,13 +472,7 @@ export class OpenAIProvider {
     });
 
     if (!response.ok) {
-      let errText = '';
-      try {
-        const errJson = await response.json();
-        errText = errJson.error?.message || response.statusText;
-      } catch (e) {
-        errText = await response.text();
-      }
+      const errText = await readErrorBody(response);
       throw new Error(`OpenAI API Error (${response.status}): ${errText}`);
     }
 
@@ -529,13 +551,7 @@ export class AnthropicProvider {
     });
 
     if (!response.ok) {
-      let errText = '';
-      try {
-        const errJson = await response.json();
-        errText = errJson.error?.message || response.statusText;
-      } catch (e) {
-        errText = await response.text();
-      }
+      const errText = await readErrorBody(response);
       throw new Error(`Anthropic API Error (${response.status}): ${errText}`);
     }
 
@@ -569,6 +585,7 @@ export class AnthropicProvider {
 export class GeminiProvider {
   constructor(config = {}) {
     this.name = 'gemini';
+    this.baseURL = (config.baseURL || 'https://generativelanguage.googleapis.com').replace(/\/+$/, '');
     this.apiKey = config.apiKey || '';
     this.model = config.model || 'gemini-3.8-flash';
     this.temperature = config.temperature !== undefined ? config.temperature : 0.7;
@@ -588,7 +605,7 @@ export class GeminiProvider {
 
     const temp = temperature !== undefined ? temperature : this.temperature;
     const tokens = maxTokens || this.maxTokens;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(this.apiKey.trim())}`;
+    const url = `${this.baseURL}/v1beta/models/${encodeURIComponent(this.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(this.apiKey.trim())}`;
 
     const bodyPayload = {
       contents: formatGeminiContents(messages),
@@ -612,13 +629,7 @@ export class GeminiProvider {
     });
 
     if (!response.ok) {
-      let errText = '';
-      try {
-        const errJson = await response.json();
-        errText = errJson.error?.message || response.statusText;
-      } catch (e) {
-        errText = await response.text();
-      }
+      const errText = await readErrorBody(response);
       throw new Error(`Gemini API Error (${response.status}): ${errText}`);
     }
 
@@ -678,11 +689,12 @@ export async function getProvider() {
   }
 
   if (activeType === 'gemini') {
+    const baseURL = await getSetting('gemini_base_url', 'https://generativelanguage.googleapis.com');
     const apiKey = await getSetting('gemini_api_key', await getSetting('llm_api_key', ''));
     const model = await getSetting('gemini_model', 'gemini-3.8-flash');
     const temperature = parseFloat(await getSetting('llm_temperature', '0.7'));
     const maxTokens = parseInt(await getSetting('llm_max_tokens', '2048'), 10);
-    return new GeminiProvider({ apiKey, model, temperature, maxTokens });
+    return new GeminiProvider({ baseURL, apiKey, model, temperature, maxTokens });
   }
 
   // Default: Mock Provider
@@ -739,15 +751,19 @@ export async function testConnection(providerInstance = null) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-    const result = await provider.complete({
-      system: 'Output exactly one word: OK',
-      messages: [{ role: 'user', content: 'Ping' }],
-      maxTokens: 5,
-      temperature: 0.1,
-      signal: controller.signal
-    });
+    let result;
+    try {
+      result = await provider.complete({
+        system: 'Output exactly one word: OK',
+        messages: [{ role: 'user', content: 'Ping' }],
+        maxTokens: 5,
+        temperature: 0.1,
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
-    clearTimeout(timeoutId);
     const latencyMs = Math.round(performance.now() - startTime);
 
     return {

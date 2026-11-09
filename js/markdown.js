@@ -102,8 +102,10 @@ export function renderMarkdown(markdown = '') {
     .join('\n');
 
   // 11. Restore Fenced Code Blocks
+  // Use a function replacement so `$` sequences in the code (e.g. `$&`, `$$`) are
+  // inserted literally instead of being interpreted as replacement patterns.
   codeBlocks.forEach((codeHtml, idx) => {
-    text = text.replace(`@@CODEBLOCK${idx}@@`, codeHtml);
+    text = text.replace(`@@CODEBLOCK${idx}@@`, () => codeHtml);
   });
 
   return text;
