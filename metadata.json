@@ -1,0 +1,6 @@
+{
+  "name": "Boardroom",
+  "description": "Local-first AI advisory board of directors for startup founders across Ideation, Validation, Business Plan, and Marketing Strategy.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

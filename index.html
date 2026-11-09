@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Boardroom — Executive AI Board of Directors</title>
+    <meta name="description" content="Local-first AI advisory board of directors for startup founders across Ideation, Validation, Business Plan, and Marketing Strategy." />
+    <meta property="og:title" content="Boardroom — Executive AI Board of Directors" />
+    <meta property="og:description" content="Local-first AI advisory board of directors for startup founders across Ideation, Validation, Business Plan, and Marketing Strategy." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Google Fonts: Instrument Serif & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- Tailwind Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              base: '#0B0F14',
+              panel: '#131A22',
+              'panel-hover': '#18222D',
+              subtle: '#1E2836',
+              'border-subtle': '#1E2836',
+              'border-strong': '#2A384C',
+              brass: {
+                DEFAULT: '#C9A227',
+                light: '#E5BC3A',
+                dark: '#9E7E1D',
+              },
+              muted: '#8A97A6',
+              faint: '#526071',
+              // Agent Identity Tokens
+              maya: '#06b6d4',
+              david: '#f59e0b',
+              priya: '#8b5cf6',
+              marcus: '#10b981',
+              elena: '#f43f5e',
+              sam: '#0ea5e9',
+              chair: '#C9A227',
+              // Semantic Status Tokens
+              success: '#10b981',
+              warn: '#f59e0b',
+              danger: '#ef4444',
+            },
+            fontFamily: {
+              serif: ['"Instrument Serif"', 'Georgia', 'serif'],
+              sans: ['"Inter"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            },
+          },
+        },
+      };
+    </script>
+
+    <!-- Custom Executive Design System Styles -->
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body class="bg-base text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-brass/20 selection:text-brass-light">
+    <!-- Skip to content for accessibility -->
+    <a href="#view-root" class="skip-link">Skip to main content</a>
+
+    <!-- Mobile Drawer Backdrop -->
+    <div id="mobile-backdrop" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 hidden md:hidden transition-opacity" aria-hidden="true"></div>
+
+    <!-- App Shell Wrapper -->
+    <div class="flex-1 flex w-full min-h-screen">
+      <!-- Left Sidebar (Collapsible drawer on mobile, persistent on >= md) -->
+      <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-panel border-r border-subtle flex flex-col transition-transform duration-200 ease-in-out -translate-x-full md:translate-x-0 md:static md:z-auto shrink-0">
+        <!-- Wordmark & Mobile Close Button -->
+        <div class="h-16 px-5 border-b border-subtle flex items-center justify-between shrink-0">
+          <a href="#/dashboard" class="group flex items-center gap-2.5 text-decoration-none">
+            <span class="w-8 h-8 rounded-lg bg-brass/10 border border-brass/30 flex items-center justify-center text-brass-light font-serif text-xl group-hover:border-brass transition-colors">
+              B
+            </span>
+            <div class="flex flex-col">
+              <span class="font-serif text-2xl tracking-wider text-slate-100 leading-none group-hover:text-brass-light transition-colors">
+                BOARDROOM
+              </span>
+              <span class="text-[10px] tracking-widest text-muted uppercase font-sans mt-0.5">
+                Executive Advisory
+              </span>
+            </div>
+          </a>
+          <button id="close-sidebar-btn" class="md:hidden p-1.5 text-muted hover:text-slate-100 rounded-lg hover:bg-white/5" aria-label="Close navigation drawer">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Venture Switcher -->
+        <div class="p-3 border-b border-subtle">
+          <div class="text-[11px] font-semibold text-muted uppercase tracking-wider px-2 mb-1.5">Active Venture</div>
+          <div class="relative">
+            <button id="venture-switcher-btn" class="w-full flex items-center justify-between p-2 rounded-lg bg-base border border-subtle hover:border-border-strong text-left transition-colors" aria-expanded="false" aria-haspopup="true">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span class="w-6 h-6 rounded bg-brass/15 text-brass-light font-semibold text-xs flex items-center justify-center shrink-0">
+                  V
+                </span>
+                <span id="sidebar-venture-name" class="text-sm font-medium text-slate-200 truncate">
+                  Apex Robotics
+                </span>
+              </div>
+              <svg class="w-4 h-4 text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4 4 4-4" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Navigation & Phase Stepper -->
+        <div class="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+          <!-- Overview Links -->
+          <div>
+            <div class="text-[11px] font-semibold text-muted uppercase tracking-wider px-2 mb-2">Workspace</div>
+            <nav class="space-y-1">
+              <a href="#/dashboard" class="sidebar-nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:text-slate-100 hover:bg-white/5 transition-colors" data-route="dashboard">
+                <svg class="w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                <span>Dashboard</span>
+              </a>
+              <a href="#/agents" class="sidebar-nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:text-slate-100 hover:bg-white/5 transition-colors" data-route="agents">
+                <svg class="w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <span>Board Members</span>
+                <span class="ml-auto chip text-[10px] py-0 px-1.5 bg-subtle">6+1</span>
+              </a>
+            </nav>
+          </div>
+
+          <!-- Phase Stepper -->
+          <div>
+            <div class="text-[11px] font-semibold text-muted uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
+              <span>Stage-Gate Sequence</span>
+              <span class="text-[10px] text-brass-light font-mono">4 PHASES</span>
+            </div>
+            <nav class="space-y-1" id="phase-stepper">
+              <a href="#/venture/default/phase/ideation" class="phase-step-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:text-slate-100 hover:bg-white/5 transition-all group" data-phase="ideation">
+                <span class="step-num w-5 h-5 rounded-full border border-subtle group-hover:border-slate-400 text-xs font-mono flex items-center justify-center text-muted group-hover:text-slate-200 transition-colors">1</span>
+                <div class="flex flex-col">
+                  <span class="leading-tight">Ideation</span>
+                  <span class="text-[11px] text-muted group-hover:text-slate-400">Gaps & Blue Ocean</span>
+                </div>
+              </a>
+
+              <a href="#/venture/default/phase/validation" class="phase-step-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:text-slate-100 hover:bg-white/5 transition-all group" data-phase="validation">
+                <span class="step-num w-5 h-5 rounded-full border border-subtle group-hover:border-slate-400 text-xs font-mono flex items-center justify-center text-muted group-hover:text-slate-200 transition-colors">2</span>
+                <div class="flex flex-col">
+                  <span class="leading-tight">Validation</span>
+                  <span class="text-[11px] text-muted group-hover:text-slate-400">Hypotheses & Tests</span>
+                </div>
+              </a>
+
+              <a href="#/venture/default/phase/business-plan" class="phase-step-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:text-slate-100 hover:bg-white/5 transition-all group" data-phase="business-plan">
+                <span class="step-num w-5 h-5 rounded-full border border-subtle group-hover:border-slate-400 text-xs font-mono flex items-center justify-center text-muted group-hover:text-slate-200 transition-colors">3</span>
+                <div class="flex flex-col">
+                  <span class="leading-tight">Business Plan</span>
+                  <span class="text-[11px] text-muted group-hover:text-slate-400">Model & Economics</span>
+                </div>
+              </a>
+
+              <a href="#/venture/default/phase/marketing" class="phase-step-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:text-slate-100 hover:bg-white/5 transition-all group" data-phase="marketing">
+                <span class="step-num w-5 h-5 rounded-full border border-subtle group-hover:border-slate-400 text-xs font-mono flex items-center justify-center text-muted group-hover:text-slate-200 transition-colors">4</span>
+                <div class="flex flex-col">
+                  <span class="leading-tight">Marketing Strategy</span>
+                  <span class="text-[11px] text-muted group-hover:text-slate-400">GTM & Channels</span>
+                </div>
+              </a>
+            </nav>
+          </div>
+        </div>
+
+        <!-- Sidebar Footer: Settings -->
+        <div class="p-3 border-t border-subtle shrink-0">
+          <a href="#/settings" class="sidebar-nav-link flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-300 hover:text-slate-100 hover:bg-white/5 transition-colors" data-route="settings">
+            <svg class="w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span>Settings & Keys</span>
+          </a>
+        </div>
+      </aside>
+
+      <!-- Center Main Workspace + Top Bar -->
+      <div class="flex-1 flex flex-col min-w-0 min-h-screen">
+        <!-- Top Bar (Persistent) -->
+        <header class="h-16 border-b border-subtle bg-panel/70 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-6 flex items-center justify-between gap-4">
+          <!-- Left side: Mobile hamburger + breadcrumb -->
+          <div class="flex items-center gap-3 min-w-0">
+            <button id="mobile-menu-btn" class="md:hidden p-2 text-muted hover:text-slate-100 rounded-lg hover:bg-white/5" aria-label="Open navigation drawer">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <div class="flex items-center gap-2.5 truncate">
+              <span id="topbar-venture" class="font-serif text-lg sm:text-xl text-slate-100 font-medium truncate">
+                Apex Robotics
+              </span>
+              <span class="text-muted/60 text-sm">/</span>
+              <span id="topbar-phase-badge" class="chip border-brass/40 text-brass-light bg-brass/10 text-xs py-0.5">
+                Phase 1: Ideation
+              </span>
+            </div>
+          </div>
+
+          <!-- Right side: Primary Action Slot -->
+          <div id="topbar-action-slot" class="flex items-center gap-2 shrink-0">
+            <!-- Buttons dynamically injected per view -->
+          </div>
+        </header>
+
+        <!-- Main Viewport + Right Rail Container -->
+        <div class="flex-1 flex min-w-0">
+          <!-- View Root: Active view mounted here -->
+          <main id="view-root" class="flex-1 p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full min-w-0 focus:outline-none" tabindex="-1">
+            <!-- Rendered by /js/app.js -->
+          </main>
+
+          <!-- Right Rail: "Board at the table" (hidden < 1280px) -->
+          <aside id="right-rail" class="hidden xl:block w-72 shrink-0 border-l border-subtle p-6 bg-panel/30">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-xs font-semibold uppercase tracking-wider text-muted">
+                Board at the Table
+              </h2>
+              <span id="right-rail-count" class="chip text-[10px] py-0 px-1.5 bg-subtle">
+                6 Active
+              </span>
+            </div>
+            
+            <p class="text-xs text-muted mb-4 leading-relaxed">
+              Directors assigned to deliberate on the current milestone:
+            </p>
+
+            <!-- Stacked Avatar Cards Container -->
+            <div id="right-rail-agents-list" class="space-y-2.5">
+              <!-- Dynamically populated or stub cards -->
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+
+    <!-- Application Module Entry Point -->
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>

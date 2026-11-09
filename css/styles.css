@@ -1,0 +1,373 @@
+/* Boardroom Executive Design System Styles */
+
+:root {
+  --bg-base: #0B0F14;
+  --bg-panel: #131A22;
+  --bg-panel-hover: #18222D;
+  --border-subtle: #1E2836;
+  --border-strong: #2A384C;
+  --brass-accent: #C9A227;
+  --brass-light: #E5BC3A;
+  --brass-dark: #9E7E1D;
+  --text-primary: #F0F4F8;
+  --text-muted: #8A97A6;
+  --text-faint: #526071;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-image: 
+    radial-gradient(at 15% 10%, rgba(201, 162, 39, 0.04) 0px, transparent 40%),
+    radial-gradient(at 85% 80%, rgba(20, 184, 166, 0.03) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(11, 15, 20, 1) 0%, rgba(7, 10, 14, 1) 100%);
+  background-attachment: fixed;
+}
+
+/* Typography Utility */
+.font-serif {
+  font-family: 'Instrument Serif', Georgia, Cambria, 'Times New Roman', serif;
+}
+
+/* Custom UI Component Classes */
+
+/* .panel: Standard executive boardroom surface */
+.panel {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.panel:hover {
+  border-color: var(--border-strong);
+}
+
+/* .panel-header: Header section inside a panel */
+.panel-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* .btn: Standard button base */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  text-decoration: none;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* .btn-primary: Warm brass accent */
+.btn-primary {
+  background: linear-gradient(135deg, #D4AF37 0%, #C9A227 100%);
+  color: #0B0F14;
+  font-weight: 600;
+  border-color: rgba(229, 188, 58, 0.4);
+  box-shadow: 0 2px 10px rgba(201, 162, 39, 0.2);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #E5BC3A 0%, #D4AF37 100%);
+  box-shadow: 0 4px 14px rgba(201, 162, 39, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* .btn-ghost: Subtle transparent button */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+/* .input: Polished dark input fields */
+.input {
+  width: 100%;
+  background-color: #0D131B;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input::placeholder {
+  color: var(--text-faint);
+}
+
+.input:focus {
+  border-color: var(--brass-accent);
+  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.2);
+}
+
+/* .avatar: Director profile circle */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 2px solid transparent;
+  flex-shrink: 0;
+  background-color: var(--bg-panel);
+}
+
+/* .chip: Clean non-pill tag */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid var(--border-subtle);
+  background-color: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* .divider: Hairline executive divider */
+.divider {
+  height: 1px;
+  width: 100%;
+  background-color: var(--border-subtle);
+  margin: 1rem 0;
+}
+
+/* Agent Color Accents */
+.agent-cyan {
+  border-color: rgba(6, 182, 212, 0.4);
+  color: #22d3ee;
+}
+.agent-cyan-bg {
+  background-color: rgba(6, 182, 212, 0.12);
+}
+
+.agent-amber {
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+}
+.agent-amber-bg {
+  background-color: rgba(245, 158, 11, 0.12);
+}
+
+.agent-violet {
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #a78bfa;
+}
+.agent-violet-bg {
+  background-color: rgba(139, 92, 246, 0.12);
+}
+
+.agent-emerald {
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+.agent-emerald-bg {
+  background-color: rgba(16, 185, 129, 0.12);
+}
+
+.agent-rose {
+  border-color: rgba(244, 63, 94, 0.4);
+  color: #fb7185;
+}
+.agent-rose-bg {
+  background-color: rgba(244, 63, 94, 0.12);
+}
+
+.agent-sky {
+  border-color: rgba(14, 165, 233, 0.4);
+  color: #38bdf8;
+}
+.agent-sky-bg {
+  background-color: rgba(14, 165, 233, 0.12);
+}
+
+.agent-brass {
+  border-color: rgba(201, 162, 39, 0.5);
+  color: #E5BC3A;
+}
+.agent-brass-bg {
+  background-color: rgba(201, 162, 39, 0.15);
+}
+
+/* Accessibility & Focus Rings */
+:focus-visible {
+  outline: 2px solid var(--brass-accent);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  background: var(--brass-accent);
+  color: #0B0F14;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  border-radius: 0.375rem;
+  z-index: 9999;
+  transition: top 0.2s ease;
+}
+
+.skip-link:focus {
+  top: 1rem;
+}
+
+/* Custom Scrollbar for Executive UI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1F2A38;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2D3D52;
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Speaking Pulse Indicator */
+@keyframes speakingGlow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.4);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: 0 0 12px 3px rgba(201, 162, 39, 0.35);
+  }
+}
+
+.is-speaking-card {
+  border-color: rgba(201, 162, 39, 0.7) !important;
+  background-color: rgba(201, 162, 39, 0.06) !important;
+  animation: speakingGlow 2s infinite ease-in-out;
+}
+
+.is-speaking-dot {
+  background-color: #10b981 !important;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulse 1.2s infinite;
+}
+
+/* Executive Print & PDF Export Stylesheet */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+  }
+
+  /* Hide app navigation chrome and composer */
+  #sidebar,
+  #mobile-backdrop,
+  header,
+  #right-rail,
+  #topbar-action-slot,
+  .tab-link,
+  #composer-textarea,
+  #composer-send-btn,
+  .btn,
+  .skip-link,
+  details summary span:last-child {
+    display: none !important;
+  }
+
+  /* Clean print view container */
+  main#view-root {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .panel {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    color: #111827 !important;
+  }
+
+  .markdown-body {
+    color: #111827 !important;
+    font-size: 11pt !important;
+  }
+
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3,
+  .markdown-body h4 {
+    color: #000000 !important;
+    page-break-after: avoid;
+  }
+
+  .chip {
+    border: 1px solid #9ca3af !important;
+    color: #374151 !important;
+    background: #f3f4f6 !important;
+  }
+
+  .deliverable-print-card {
+    page-break-inside: avoid;
+    border-bottom: 2px solid #e5e7eb !important;
+    padding-bottom: 2rem !important;
+    margin-bottom: 2rem !important;
+  }
+}
+
