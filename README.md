@@ -17,10 +17,8 @@ Boardroom is a local-first web application providing startup founders with a str
 │   └── styles.css           # Custom utilities (.panel, .btn, .chip), agent tokens, scrollbars
 ├── js/
 │   ├── app.js               # Bootstrap, hash-based router (#/dashboard, #/venture/:id/phase/:p, #/agents, #/settings)
-│   ├── agents-data.js       # Executive roster metadata & stage-gate phase definitions
 │   └── views/
 │       ├── dashboard.js     # Workspace overview & stage-gate cards
-│       ├── phase.js         # Deliberation chamber view & stage-gate controller
 │       ├── agents.js        # Full 6+1 board member roster with domain quotes & focus areas
 │       └── settings.js      # LLM provider configuration & IndexedDB local storage status
 └── README.md                # Project documentation

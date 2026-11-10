@@ -14,6 +14,9 @@
 import { getAll, saveVenture, deleteVenture, duplicateVenture, getVentureStats, setSetting, put } from '../db.js';
 import { PHASES, PHASE_AGENTS, DEFAULT_AGENTS, THE_CHAIR } from '../agents.js';
 
+// Tracks the active document-level Escape listener so re-renders don't leak listeners.
+let escapeKeyHandler = null;
+
 // Pre-configured Starter Venture Templates
 export const SAMPLE_TEMPLATES = [
   {
@@ -398,6 +401,43 @@ export async function render(container, params = {}) {
       renderGrid();
     }
   });
+
+  // Backdrop-click close for all three modals (inner panel stops propagation via onclick)
+  const newVentureBackdrop = document.getElementById('new-venture-modal-backdrop');
+  const renameBackdrop = document.getElementById('rename-modal-backdrop');
+  const deleteBackdrop = document.getElementById('delete-modal-backdrop');
+
+  newVentureBackdrop?.addEventListener('click', (e) => {
+    if (e.target === newVentureBackdrop) closeNewVentureModal();
+  });
+  renameBackdrop?.addEventListener('click', (e) => {
+    if (e.target === renameBackdrop) {
+      renameBackdrop.classList.add('hidden');
+      renamingVenture = null;
+    }
+  });
+  deleteBackdrop?.addEventListener('click', (e) => {
+    if (e.target === deleteBackdrop) {
+      deleteBackdrop.classList.add('hidden');
+      deletingVenture = null;
+    }
+  });
+
+  // Escape closes whichever dashboard modal is open (single shared listener, rebind-safe)
+  if (escapeKeyHandler) document.removeEventListener('keydown', escapeKeyHandler);
+  escapeKeyHandler = (e) => {
+    if (e.key !== 'Escape') return;
+    if (newVentureBackdrop && !newVentureBackdrop.classList.contains('hidden')) {
+      closeNewVentureModal();
+    } else if (renameBackdrop && !renameBackdrop.classList.contains('hidden')) {
+      renameBackdrop.classList.add('hidden');
+      renamingVenture = null;
+    } else if (deleteBackdrop && !deleteBackdrop.classList.contains('hidden')) {
+      deleteBackdrop.classList.add('hidden');
+      deletingVenture = null;
+    }
+  };
+  document.addEventListener('keydown', escapeKeyHandler);
 }
 
 /**
@@ -808,7 +848,7 @@ function renderModalStep() {
           <div class="chip text-[10px] py-0 px-2 bg-brass/10 text-brass-light border-brass/30 mb-1 font-mono">
             STEP 2 OF 2 · BOARD PREVIEW
           </div>
-          <h3 class="font-serif text-2xl text-slate-100">
+          <h3 id="modal-title" class="font-serif text-2xl text-slate-100">
             Convene Phase 1: Ideation
           </h3>
         </div>

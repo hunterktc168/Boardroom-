@@ -222,6 +222,11 @@ function wireEventListeners(container, agents) {
       resetModal.classList.add('hidden');
     });
 
+    // Close on backdrop click (inner panel stops propagation via onclick)
+    resetModal.addEventListener('click', (e) => {
+      if (e.target === resetModal) resetModal.classList.add('hidden');
+    });
+
     confirmResetBtn?.addEventListener('click', async () => {
       resetModal.classList.add('hidden');
       await resetAgentsToDefault(DEFAULT_AGENTS);
@@ -288,7 +293,13 @@ function wireEventListeners(container, agents) {
 
   if (escapeKeyHandler) document.removeEventListener('keydown', escapeKeyHandler);
   escapeKeyHandler = (e) => {
-    if (e.key === 'Escape') closeAgentDrawer();
+    if (e.key !== 'Escape') return;
+    // Reset modal sits above the drawer; close it first if open.
+    if (resetModal && !resetModal.classList.contains('hidden')) {
+      resetModal.classList.add('hidden');
+    } else {
+      closeAgentDrawer();
+    }
   };
   document.addEventListener('keydown', escapeKeyHandler);
 }
