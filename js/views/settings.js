@@ -11,9 +11,6 @@ import { getSetting, setSetting, resetAllData, dbSelfTest } from '../db.js';
 import { testConnection, MockProvider, OpenAIProvider, AnthropicProvider, GeminiProvider } from '../llm.js';
 import { DEFAULT_AGENTS } from '../agents.js';
 
-// Tracks the active document-level Escape listener so re-renders don't leak listeners.
-let escapeKeyHandler = null;
-
 export async function render(container, params = {}) {
   // Update Topbar action slot
   const actionSlot = document.getElementById('topbar-action-slot');
@@ -28,13 +25,11 @@ export async function render(container, params = {}) {
     `;
   }
 
-  // Load persisted settings (mock default).
-  // Prefer the active provider's own slot (what llm.js getProvider() actually uses),
-  // then fall back to the generic slot for legacy installs.
+  // Load persisted settings (mock default)
   const provider = await getSetting('llm_provider_type', 'mock');
-  const apiKey = (await getSetting(`${provider}_api_key`, '')) || (await getSetting('llm_api_key', ''));
-  const baseUrl = (await getSetting(`${provider}_base_url`, '')) || (await getSetting('llm_base_url', ''));
-  const model = (await getSetting(`${provider}_model`, '')) || (await getSetting('llm_model', ''));
+  const apiKey = await getSetting('llm_api_key', '');
+  const baseUrl = await getSetting('llm_base_url', '');
+  const model = await getSetting('llm_model', '');
   const temperature = parseFloat(await getSetting('llm_temperature', '0.7'));
   const maxTokens = parseInt(await getSetting('llm_max_tokens', '2048'), 10);
 
@@ -356,7 +351,7 @@ function wireSettingsEvents(container, defaultsByProvider) {
 
   // Provider dropdown change
   if (providerSelect) {
-    providerSelect.addEventListener('change', async (e) => {
+    providerSelect.addEventListener('change', (e) => {
       const p = e.target.value;
       const defs = defaultsByProvider[p] || defaultsByProvider.mock;
 
@@ -377,15 +372,6 @@ function wireSettingsEvents(container, defaultsByProvider) {
         if (providerHint) providerHint.textContent = `Connects directly to ${p} via browser fetch and SSE streaming.`;
         if (keyHint) keyHint.textContent = 'Stored strictly in local client IndexedDB.';
       }
-
-      // Repopulate fields from the selected provider's own slot so keys/URLs/models
-      // round-trip per provider instead of leaking across providers.
-      const storedKey = await getSetting(`${p}_api_key`, '');
-      const storedBase = await getSetting(`${p}_base_url`, '');
-      const storedModel = await getSetting(`${p}_model`, '');
-      if (apiKeyInput) apiKeyInput.value = p === 'mock' ? '' : storedKey;
-      if (baseUrlInput) baseUrlInput.value = storedBase;
-      if (modelInput) modelInput.value = storedModel;
 
       if (baseUrlInput) baseUrlInput.placeholder = defs.url;
       if (modelInput) modelInput.placeholder = defs.model;
@@ -434,7 +420,6 @@ function wireSettingsEvents(container, defaultsByProvider) {
       if (modelVal) await setSetting('anthropic_model', modelVal);
     } else if (selectedProvider === 'gemini') {
       await setSetting('gemini_api_key', keyVal);
-      if (baseUrlVal) await setSetting('gemini_base_url', baseUrlVal);
       if (modelVal) await setSetting('gemini_model', modelVal);
     }
 
@@ -484,11 +469,6 @@ function wireSettingsEvents(container, defaultsByProvider) {
 
     cancelForgetBtn?.addEventListener('click', () => {
       forgetModal.classList.add('hidden');
-    });
-
-    // Close on backdrop click (inner panel stops propagation via onclick)
-    forgetModal.addEventListener('click', (e) => {
-      if (e.target === forgetModal) forgetModal.classList.add('hidden');
     });
 
     confirmForgetBtn?.addEventListener('click', async () => {
@@ -601,11 +581,6 @@ function wireSettingsEvents(container, defaultsByProvider) {
       deleteModal.classList.add('hidden');
     });
 
-    // Close on backdrop click (inner panel stops propagation via onclick)
-    deleteModal.addEventListener('click', (e) => {
-      if (e.target === deleteModal) deleteModal.classList.add('hidden');
-    });
-
     confirmDeleteBtn?.addEventListener('click', async () => {
       const confirmVal = deleteInput?.value.trim();
       if (confirmVal === 'DELETE') {
@@ -618,16 +593,4 @@ function wireSettingsEvents(container, defaultsByProvider) {
       }
     });
   }
-
-  // Escape closes whichever settings modal is open (single shared listener, rebind-safe)
-  if (escapeKeyHandler) document.removeEventListener('keydown', escapeKeyHandler);
-  escapeKeyHandler = (e) => {
-    if (e.key !== 'Escape') return;
-    if (forgetModal && !forgetModal.classList.contains('hidden')) {
-      forgetModal.classList.add('hidden');
-    } else if (deleteModal && !deleteModal.classList.contains('hidden')) {
-      deleteModal.classList.add('hidden');
-    }
-  };
-  document.addEventListener('keydown', escapeKeyHandler);
 }

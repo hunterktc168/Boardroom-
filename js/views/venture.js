@@ -129,7 +129,9 @@ export async function render(container, params = {}) {
   const roster = (storedAgents && storedAgents.length > 0) ? storedAgents : DEFAULT_AGENTS;
 
   const assignedAgentIds = PHASE_AGENTS[currentPhase.id] || ['maya', 'sam', 'david'];
-  const phaseAgents = roster.filter(a => a.enabled && assignedAgentIds.includes(a.id));
+  const phaseAgents = roster
+    .filter(a => a.enabled && assignedAgentIds.includes(a.id))
+    .sort((a, b) => assignedAgentIds.indexOf(a.id) - assignedAgentIds.indexOf(b.id));
   const seatedAgents = [THE_CHAIR, ...phaseAgents];
 
   // Mode and Target Agent determination from params or defaults
@@ -318,6 +320,7 @@ export async function render(container, params = {}) {
             activeTargetAgentId,
             currentTargetAgent,
             messages,
+            rounds: activeSession.rounds || [],
             phaseDeliverable
           }) : (activeTab === 'deliverables' ? renderDeliverablesTab({ venture, ventureDeliverables }) : renderNotesTab({ venture }))
         }
@@ -425,6 +428,7 @@ function renderBoardroomTab({
   activeTargetAgentId,
   currentTargetAgent,
   messages,
+  rounds = [],
   phaseDeliverable
 }) {
   const progressPercent = Math.round(((safePhaseIdx + 1) / 4) * 100);
@@ -526,7 +530,7 @@ function renderBoardroomTab({
                     "${activeMode === 'single' ? starterInfo.pitch : `Here is the raw thesis for ${escapeHtml(venture.name)}: what is our asymmetric wedge?`}"
                   </button>
                 </div>
-              ` : messages.map(msg => renderMessageBubble(msg, currentPhase)).join('')}
+              ` : renderGroupedMessages(messages, currentPhase, activeMode, rounds)}
             </div>
           </div>
 
@@ -609,23 +613,28 @@ function renderBoardroomTab({
             </div>
 
             <!-- In-Session Controls Bar (Visible while multi-agent session is active) -->
-            <div id="session-controls-bar" class="hidden flex items-center justify-between p-2.5 rounded-lg bg-base border border-brass/40 text-xs shadow-md animate-fadeIn flex-wrap gap-2">
-              <div class="flex items-center gap-2 min-w-0">
-                <span class="w-2 h-2 rounded-full bg-brass animate-ping shrink-0"></span>
-                <span id="session-progress-text" class="text-brass-light font-mono text-[11px] font-semibold truncate">
-                  Deliberation in session...
-                </span>
+            <div id="session-controls-bar" class="hidden p-2.5 rounded-lg bg-base border border-brass/40 text-xs shadow-md animate-fadeIn space-y-2">
+              <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="w-2 h-2 rounded-full bg-brass animate-ping shrink-0"></span>
+                  <span id="session-progress-text" class="text-brass-light font-mono text-[11px] font-semibold truncate">
+                    Deliberation in session...
+                  </span>
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap shrink-0">
+                  <button id="session-pause-btn" type="button" class="btn btn-ghost text-xs py-1 px-2.5 border border-subtle text-slate-300 hover:text-white hover:border-slate-400">
+                    Pause after current speaker
+                  </button>
+                  <button id="session-skip-chair-btn" type="button" class="btn btn-ghost text-xs py-1 px-2.5 border border-brass/40 text-brass-light hover:bg-brass/10">
+                    Skip to Chair summary
+                  </button>
+                  <button id="session-stop-btn" type="button" class="btn bg-danger/20 hover:bg-danger/30 text-danger border border-danger/40 text-xs py-1 px-2.5 font-semibold">
+                    Stop
+                  </button>
+                </div>
               </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button id="session-pause-btn" type="button" class="btn btn-ghost text-xs py-1 px-2.5 border border-subtle text-slate-300 hover:text-white hover:border-slate-400">
-                  Pause after current speaker
-                </button>
-                <button id="session-skip-chair-btn" type="button" class="btn btn-ghost text-xs py-1 px-2.5 border border-brass/40 text-brass-light hover:bg-brass/10">
-                  Skip to Chair summary
-                </button>
-                <button id="session-stop-btn" type="button" class="btn bg-danger/20 hover:bg-danger/30 text-danger border border-danger/40 text-xs py-1 px-2.5 font-semibold">
-                  Stop
-                </button>
+              <div class="w-full h-1 bg-panel rounded-full overflow-hidden border border-subtle">
+                <div id="session-progress-bar" class="h-full bg-gradient-to-r from-brass to-brass-light transition-all duration-300" style="width: 10%"></div>
               </div>
             </div>
 
@@ -760,6 +769,46 @@ function renderBoardroomTab({
       </div>
     </div>
   `;
+}
+
+/**
+ * Render grouped messages with visually distinct Session Header Bars in full-board mode
+ */
+function renderGroupedMessages(messages, currentPhase, activeMode, rounds = []) {
+  let html = '';
+  let currentRenderedRound = null;
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+
+    if (activeMode === 'all' && msg.roundId && msg.roundId !== currentRenderedRound) {
+      currentRenderedRound = msg.roundId;
+      const roundMeta = (rounds || []).find(r => r.id === msg.roundId);
+      const roundMsgs = messages.filter(m => m.roundId === msg.roundId);
+      const distinctSpeakers = roundMeta?.participantCount ||
+        new Set(roundMsgs.filter(m => m.role !== 'user' && m.agentId !== 'chair').map(m => m.agentId || m.author)).size;
+      const firstUserMsg = roundMsgs.find(m => m.role === 'user');
+      const roundTitle = roundMeta?.title || deriveSessionTitle(firstUserMsg?.text || 'Board Session');
+      const timeAgo = formatRelativeTime(roundMeta?.startedAt || msg.timestamp);
+
+      html += `
+        <div class="session-header-bar flex items-center justify-between py-2 px-3.5 rounded-lg bg-panel border border-subtle text-xs my-3 shadow-sm gap-2 flex-wrap">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-2 h-2 rounded-full bg-brass shrink-0"></span>
+            <span class="font-serif text-slate-100 font-medium truncate">Board session: ${escapeHtml(roundTitle)}</span>
+            <span class="chip text-[9px] py-0 px-1.5 bg-base border-subtle font-mono text-muted shrink-0">
+              ${distinctSpeakers || 1} members
+            </span>
+          </div>
+          <span class="text-[10px] font-mono text-faint shrink-0">${timeAgo}</span>
+        </div>
+      `;
+    }
+
+    html += renderMessageBubble(msg, currentPhase);
+  }
+
+  return html;
 }
 
 /**
@@ -995,35 +1044,174 @@ function wireBoardroomChamber({
   let activeAbortController = null;
   let isGenerating = false;
   let lastUserText = '';
-  // Number of messages currently present in the DOM transcript. The initial shell
-  // rendered the session's existing messages, so seed it from the initial session.
-  let renderedCount = (initialSession.messages || []).length;
 
-  // Roundtable room participants & speaking sequence state
+  // Customizable room participants & in-session roundtable control flags
   let roomParticipants = phaseAgents.map(a => ({ ...a, enabled: true }));
-  const sessionControl = { pauseAfterCurrent: false, isStopped: false, skipToChair: false };
+  const sessionControl = {
+    pauseAfterCurrent: false,
+    isStopped: false,
+    skipToChair: false
+  };
 
   const textarea = document.getElementById('composer-textarea');
-  // NOTE: sendBtn and composerFooterHint live inside #composer-actions-bar, whose
-  // innerHTML is rebuilt by showInSessionUI()/restoreSendButton(). These references
-  // must be re-queried after each rebuild, so they are declared with `let` and
-  // reassigned in restoreSendButton().
-  let sendBtn = document.getElementById('composer-send-btn');
-  let composerFooterHint = document.getElementById('composer-footer-hint');
+  const sendBtn = document.getElementById('composer-send-btn');
   const transcriptFeed = document.getElementById('transcript-feed');
   const messageCountBadge = document.getElementById('message-count-badge');
   const actionsBar = document.getElementById('composer-actions-bar');
-  const sessionControlsBar = document.getElementById('session-controls-bar');
-  const sessionProgressText = document.getElementById('session-progress-text');
-  const sessionPauseBtn = document.getElementById('session-pause-btn');
-  const sessionSkipChairBtn = document.getElementById('session-skip-chair-btn');
-  const sessionStopBtn = document.getElementById('session-stop-btn');
-  const roomParticipantsSheet = document.getElementById('room-participants-sheet');
   const modeTabAll = document.getElementById('mode-tab-all');
   const modeTabSingle = document.getElementById('mode-tab-single');
   const inlineAgentPicker = document.getElementById('inline-agent-picker');
+  const roomParticipantsSheet = document.getElementById('room-participants-sheet');
+  const roomParticipantsChips = document.getElementById('room-participants-chips');
+  const activeParticipantsCount = document.getElementById('active-participants-count');
+  const sessionControlsBar = document.getElementById('session-controls-bar');
+  const sessionProgressText = document.getElementById('session-progress-text');
+  const sessionProgressBar = document.getElementById('session-progress-bar');
+  const sessionPauseBtn = document.getElementById('session-pause-btn');
+  const sessionSkipChairBtn = document.getElementById('session-skip-chair-btn');
+  const sessionStopBtn = document.getElementById('session-stop-btn');
   const transcriptHeaderTitle = document.getElementById('transcript-header-title');
   const transcriptModeBadge = document.getElementById('transcript-mode-badge');
+  const composerFooterHint = document.getElementById('composer-footer-hint');
+
+  // Render "Who's in the room?" pre-session sheet
+  function renderRoomParticipantsSheet() {
+    if (!roomParticipantsChips) return;
+
+    const enabledCount = roomParticipants.filter(p => p.enabled !== false).length;
+    if (activeParticipantsCount) {
+      activeParticipantsCount.textContent = `${enabledCount} seated`;
+    }
+
+    roomParticipantsChips.innerHTML = roomParticipants.map((agent, idx) => {
+      const isEnabled = agent.enabled !== false;
+      const colorClass = `agent-${agent.color || 'cyan'}`;
+      const colorBgClass = `agent-${agent.color || 'cyan'}-bg`;
+
+      return `
+        <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs transition-all ${isEnabled ? 'border-subtle bg-panel text-slate-200' : 'border-subtle/50 bg-base/40 text-muted opacity-60'}">
+          <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              class="participant-toggle-cb rounded border-subtle text-brass focus:ring-brass bg-base cursor-pointer"
+              data-agent-id="${agent.id}"
+              ${isEnabled ? 'checked' : ''}
+              ${isGenerating ? 'disabled' : ''}
+              title="Toggle ${agent.name}"
+            />
+            <span class="text-[10px] font-mono text-faint">${idx + 1}.</span>
+            <span class="avatar w-4 h-4 text-[8px] ${colorBgClass} ${colorClass} font-mono font-bold shrink-0">
+              ${agent.initials}
+            </span>
+            <span class="font-medium ${!isEnabled ? 'line-through' : ''}">${agent.name}</span>
+          </label>
+          <div class="inline-flex items-center border-l border-subtle/60 pl-1 ml-0.5 gap-0.5">
+            <button
+              type="button"
+              class="move-participant-up-btn px-1 text-[10px] text-muted hover:text-slate-100 rounded hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed"
+              data-index="${idx}"
+              ${idx === 0 || isGenerating ? 'disabled' : ''}
+              title="Move earlier in speaking order"
+              aria-label="Move ${agent.name} earlier"
+            >←</button>
+            <button
+              type="button"
+              class="move-participant-down-btn px-1 text-[10px] text-muted hover:text-slate-100 rounded hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed"
+              data-index="${idx}"
+              ${idx === roomParticipants.length - 1 || isGenerating ? 'disabled' : ''}
+              title="Move later in speaking order"
+              aria-label="Move ${agent.name} later"
+            >→</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Wire toggle checkboxes
+    roomParticipantsChips.querySelectorAll('.participant-toggle-cb').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const agentId = cb.getAttribute('data-agent-id');
+        const target = roomParticipants.find(p => p.id === agentId);
+        if (target) {
+          target.enabled = cb.checked;
+          renderRoomParticipantsSheet();
+        }
+      });
+    });
+
+    // Wire reorder earlier
+    roomParticipantsChips.querySelectorAll('.move-participant-up-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-index'), 10);
+        if (idx > 0) {
+          const temp = roomParticipants[idx];
+          roomParticipants[idx] = roomParticipants[idx - 1];
+          roomParticipants[idx - 1] = temp;
+          renderRoomParticipantsSheet();
+        }
+      });
+    });
+
+    // Wire reorder later
+    roomParticipantsChips.querySelectorAll('.move-participant-down-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-index'), 10);
+        if (idx < roomParticipants.length - 1) {
+          const temp = roomParticipants[idx];
+          roomParticipants[idx] = roomParticipants[idx + 1];
+          roomParticipants[idx + 1] = temp;
+          renderRoomParticipantsSheet();
+        }
+      });
+    });
+
+    // Disable Send to Board if 0 participants are checked
+    const activeSendBtn = document.getElementById('composer-send-btn');
+    if (activeSendBtn && activeMode === 'all' && !isGenerating) {
+      activeSendBtn.disabled = enabledCount === 0;
+      if (enabledCount === 0) {
+        activeSendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      } else {
+        activeSendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    }
+  }
+
+  renderRoomParticipantsSheet();
+
+  // Wire in-session roundtable controls
+  sessionPauseBtn?.addEventListener('click', () => {
+    sessionControl.pauseAfterCurrent = !sessionControl.pauseAfterCurrent;
+    if (sessionControl.pauseAfterCurrent) {
+      sessionPauseBtn.textContent = 'Resume Session';
+      sessionPauseBtn.className = 'btn text-xs py-1 px-2.5 bg-brass text-base font-bold shadow-sm';
+      if (sessionProgressText) {
+        sessionProgressText.textContent = 'Pausing after current speaker finishes...';
+      }
+    } else {
+      sessionPauseBtn.textContent = 'Pause after current speaker';
+      sessionPauseBtn.className = 'btn btn-ghost text-xs py-1 px-2.5 border border-subtle text-slate-300 hover:text-white hover:border-slate-400';
+      if (sessionProgressText) {
+        sessionProgressText.textContent = 'Resuming roundtable...';
+      }
+    }
+  });
+
+  sessionSkipChairBtn?.addEventListener('click', () => {
+    sessionControl.skipToChair = true;
+    sessionControl.pauseAfterCurrent = false;
+    if (sessionProgressText) {
+      sessionProgressText.textContent = 'Advancing directly to The Chair Round Summary...';
+    }
+  });
+
+  sessionStopBtn?.addEventListener('click', () => {
+    sessionControl.isStopped = true;
+    sessionControl.pauseAfterCurrent = false;
+    if (activeAbortController) {
+      activeAbortController.abort();
+    }
+  });
 
   // Auto-grow textarea
   textarea?.addEventListener('input', () => {
@@ -1049,14 +1237,14 @@ function wireBoardroomChamber({
 
   // Switch between "Convene full board" and "Ask one member"
   modeTabAll?.addEventListener('click', async () => {
-    if (activeMode === 'all') return;
+    if (activeMode === 'all' || isGenerating) return;
     activeMode = 'all';
     updateModeUI();
     await switchThread('all');
   });
 
   modeTabSingle?.addEventListener('click', async () => {
-    if (activeMode === 'single') return;
+    if (activeMode === 'single' || isGenerating) return;
     activeMode = 'single';
     updateModeUI();
     await switchThread(targetAgentId);
@@ -1066,6 +1254,7 @@ function wireBoardroomChamber({
   const pickerChips = document.querySelectorAll('.agent-picker-chip');
   pickerChips.forEach(chip => {
     chip.addEventListener('click', async () => {
+      if (isGenerating) return;
       const agentId = chip.getAttribute('data-picker-agent');
       if (agentId && agentId !== targetAgentId) {
         targetAgentId = agentId;
@@ -1080,6 +1269,7 @@ function wireBoardroomChamber({
   const directorCards = document.querySelectorAll('.director-table-card');
   directorCards.forEach(card => {
     card.addEventListener('click', async () => {
+      if (isGenerating) return;
       const agentId = card.getAttribute('data-agent-id');
       if (agentId && agentId !== 'chair') {
         activeMode = 'single';
@@ -1092,105 +1282,7 @@ function wireBoardroomChamber({
     });
   });
 
-  // Render "Who's in the room?" attendance & sequence sheet
-  function renderRoomParticipants() {
-    const chipsContainer = document.getElementById('room-participants-chips');
-    const countBadge = document.getElementById('active-participants-count');
-    if (!chipsContainer) return;
-
-    const enabledCount = roomParticipants.filter(p => p.enabled !== false).length;
-    if (countBadge) {
-      countBadge.textContent = `${enabledCount} seated`;
-    }
-
-    chipsContainer.innerHTML = roomParticipants.map((agent, index) => {
-      const isEnabled = agent.enabled !== false;
-      const colorClass = `agent-${agent.color || 'cyan'}`;
-      const colorBgClass = `agent-${agent.color || 'cyan'}-bg`;
-
-      return `
-        <div class="inline-flex items-center gap-1.5 p-1 px-2 rounded-lg border transition-all ${isEnabled ? 'border-brass/40 bg-brass/10 text-slate-100' : 'border-subtle bg-base text-muted opacity-60'}">
-          <input 
-            type="checkbox" 
-            class="room-participant-cb accent-[#D4AF37] cursor-pointer" 
-            data-agent-id="${agent.id}" 
-            ${isEnabled ? 'checked' : ''} 
-            title="Toggle ${agent.name}"
-          />
-          <span class="avatar w-5 h-5 text-[9px] ${colorBgClass} ${colorClass} font-mono font-bold shrink-0">
-            ${agent.initials}
-          </span>
-          <span class="text-xs font-medium">${agent.name.split(' ')[0]}</span>
-          <span class="chip text-[9px] py-0 px-1 font-mono uppercase bg-base text-muted">${agent.shortRole}</span>
-
-          <!-- Sequence Arrows -->
-          <div class="flex items-center gap-0.5 ml-1 border-l border-subtle/60 pl-1">
-            <button 
-              type="button" 
-              class="room-order-btn p-0.5 text-muted hover:text-brass-light disabled:opacity-30 disabled:hover:text-muted" 
-              data-agent-id="${agent.id}" 
-              data-dir="up" 
-              ${index === 0 ? 'disabled' : ''}
-              title="Move earlier in speaking order"
-            >▲</button>
-            <button 
-              type="button" 
-              class="room-order-btn p-0.5 text-muted hover:text-brass-light disabled:opacity-30 disabled:hover:text-muted" 
-              data-agent-id="${agent.id}" 
-              data-dir="down" 
-              ${index === roomParticipants.length - 1 ? 'disabled' : ''}
-              title="Move later in speaking order"
-            >▼</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    // Wire toggle checkboxes
-    chipsContainer.querySelectorAll('.room-participant-cb').forEach(cb => {
-      cb.addEventListener('change', () => {
-        const id = cb.getAttribute('data-agent-id');
-        const target = roomParticipants.find(p => p.id === id);
-        if (target) {
-          const enabledCount = roomParticipants.filter(p => p.enabled !== false).length;
-          // Prevent disabling all participants
-          if (!cb.checked && enabledCount <= 1) {
-            cb.checked = true;
-            return;
-          }
-          target.enabled = cb.checked;
-          renderRoomParticipants();
-        }
-      });
-    });
-
-    // Wire sequence reordering
-    chipsContainer.querySelectorAll('.room-order-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-agent-id');
-        const dir = btn.getAttribute('data-dir');
-        const curIdx = roomParticipants.findIndex(a => a.id === id);
-        if (curIdx === -1) return;
-
-        if (dir === 'up' && curIdx > 0) {
-          const temp = roomParticipants[curIdx - 1];
-          roomParticipants[curIdx - 1] = roomParticipants[curIdx];
-          roomParticipants[curIdx] = temp;
-          renderRoomParticipants();
-        } else if (dir === 'down' && curIdx < roomParticipants.length - 1) {
-          const temp = roomParticipants[curIdx + 1];
-          roomParticipants[curIdx + 1] = roomParticipants[curIdx];
-          roomParticipants[curIdx] = temp;
-          renderRoomParticipants();
-        }
-      });
-    });
-  }
-
-  // Initial render of participants sheet
-  renderRoomParticipants();
-
-  // Wire message action buttons (Copy, Regenerate, Challenge, Retry, Cross-Ask, Promote)
+  // Wire message action buttons
   wireTranscriptActions();
 
   // Wire starter pitch button in empty state
@@ -1206,17 +1298,15 @@ function wireBoardroomChamber({
 
       inlineAgentPicker?.classList.add('hidden');
       inlineAgentPicker?.classList.remove('flex');
-
-      if (roomParticipantsSheet) {
-        roomParticipantsSheet.classList.remove('hidden');
-        roomParticipantsSheet.classList.add('block');
-      }
+      roomParticipantsSheet?.classList.remove('hidden');
 
       if (transcriptHeaderTitle) transcriptHeaderTitle.textContent = 'Full Board Deliberation Record';
       if (transcriptModeBadge) transcriptModeBadge.textContent = 'Chamber Quorum';
       if (composerFooterHint) composerFooterHint.textContent = 'Multi-agent sequential deliberation · Quorum active';
-      if (sendBtn) sendBtn.querySelector('span').textContent = 'Send to Board';
+      const activeSend = document.getElementById('composer-send-btn');
+      if (activeSend?.querySelector('span')) activeSend.querySelector('span').textContent = 'Send to Board';
       if (textarea) textarea.placeholder = 'Pitch an assumption, challenge a director, or clarify market data...';
+      renderRoomParticipantsSheet();
     } else {
       modeTabSingle?.classList.add('bg-brass', 'text-base', 'font-bold', 'shadow-sm');
       modeTabSingle?.classList.remove('text-muted');
@@ -1225,16 +1315,17 @@ function wireBoardroomChamber({
 
       inlineAgentPicker?.classList.remove('hidden');
       inlineAgentPicker?.classList.add('flex');
-
-      if (roomParticipantsSheet) {
-        roomParticipantsSheet.classList.add('hidden');
-        roomParticipantsSheet.classList.remove('block');
-      }
+      roomParticipantsSheet?.classList.add('hidden');
 
       if (transcriptHeaderTitle) transcriptHeaderTitle.textContent = `1:1 Consultation with ${targetAgent.name}`;
       if (transcriptModeBadge) transcriptModeBadge.textContent = `Direct Thread: ${targetAgent.shortRole}`;
       if (composerFooterHint) composerFooterHint.textContent = `1:1 Consultation with ${targetAgent.name} · Real-time streaming`;
-      if (sendBtn) sendBtn.querySelector('span').textContent = `Send to ${targetAgent.name}`;
+      const activeSend = document.getElementById('composer-send-btn');
+      if (activeSend) {
+        activeSend.disabled = false;
+        activeSend.classList.remove('opacity-50', 'cursor-not-allowed');
+        if (activeSend.querySelector('span')) activeSend.querySelector('span').textContent = `Send to ${targetAgent.name}`;
+      }
       if (textarea) textarea.placeholder = `Ask ${targetAgent.name} (${targetAgent.shortRole}) a direct question or challenge...`;
     }
 
@@ -1273,7 +1364,8 @@ function wireBoardroomChamber({
     if (transcriptHeaderTitle) transcriptHeaderTitle.textContent = `1:1 Consultation with ${targetAgent.name}`;
     if (transcriptModeBadge) transcriptModeBadge.textContent = `Direct Thread: ${targetAgent.shortRole}`;
     if (composerFooterHint) composerFooterHint.textContent = `1:1 Consultation with ${targetAgent.name} · Real-time streaming`;
-    if (sendBtn) sendBtn.querySelector('span').textContent = `Send to ${targetAgent.name}`;
+    const activeSend = document.getElementById('composer-send-btn');
+    if (activeSend?.querySelector('span')) activeSend.querySelector('span').textContent = `Send to ${targetAgent.name}`;
     if (textarea) textarea.placeholder = `Ask ${targetAgent.name} (${targetAgent.shortRole}) a direct question or challenge...`;
   }
 
@@ -1283,7 +1375,7 @@ function wireBoardroomChamber({
     renderFeed();
   }
 
-  // Render Transcript Feed with Session Header Bars
+  // Render Transcript Feed
   function renderFeed() {
     if (!transcriptFeed) return;
     const msgs = activeSession.messages || [];
@@ -1308,42 +1400,10 @@ function wireBoardroomChamber({
       `;
       wireStarterBtn();
     } else {
-      let feedHtml = '';
-      let lastRoundId = null;
-
-      msgs.forEach(m => {
-        // Group full-board chamber messages by roundId
-        if (activeMode === 'all' && m.roundId && m.roundId !== lastRoundId) {
-          lastRoundId = m.roundId;
-          const roundRec = (activeSession.rounds || []).find(r => r.id === m.roundId);
-          const roundTitle = roundRec?.title || (m.role === 'user' ? deriveSessionTitle(m.text) : 'Board Roundtable Session');
-          const participantCount = roundRec?.participantCount || roundRec?.participantIds?.length || phaseAgents.length;
-          const roundTime = roundRec?.startedAt || m.timestamp;
-
-          feedHtml += `
-            <div class="session-round-header flex items-center justify-between p-2.5 rounded-lg bg-base/90 border border-brass/30 text-xs text-slate-200 my-4 shadow-sm">
-              <div class="flex items-center gap-2 min-w-0">
-                <span class="chip text-[10px] py-0.5 px-2 bg-brass/15 text-brass-light border-brass/40 font-mono font-semibold shrink-0">
-                  Board Session
-                </span>
-                <span class="font-serif font-medium text-slate-100 truncate">${escapeHtml(roundTitle)}</span>
-              </div>
-              <div class="flex items-center gap-2 text-[10px] font-mono text-muted shrink-0">
-                <span>${participantCount} members</span>
-                <span>•</span>
-                <span>${formatRelativeTime(roundTime)}</span>
-              </div>
-            </div>
-          `;
-        }
-        feedHtml += renderMessageBubble(m, currentPhase);
-      });
-
-      transcriptFeed.innerHTML = feedHtml;
+      transcriptFeed.innerHTML = renderGroupedMessages(msgs, currentPhase, activeMode, activeSession.rounds || []);
       wireTranscriptActions();
     }
 
-    renderedCount = msgs.length;
     transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
 
     if (messageCountBadge) {
@@ -1364,93 +1424,80 @@ function wireBoardroomChamber({
     }
   }
 
-  // In-Session Controls management
-  function showInSessionUI(isSingle = false) {
-    if (isSingle) {
-      if (!actionsBar) return;
-      actionsBar.innerHTML = `
-        <div class="flex items-center gap-2 text-xs text-brass-light font-mono">
-          <span class="w-2 h-2 rounded-full bg-brass animate-ping"></span>
-          <span>${targetAgent.name} is streaming response...</span>
-        </div>
-        <button id="composer-stop-btn" class="btn bg-danger/20 hover:bg-danger/30 text-danger border border-danger/40 text-xs py-1.5 px-4 font-semibold">
-          <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <rect x="6" y="6" width="12" height="12" stroke-width="2" rx="1" />
-          </svg>
-          Stop Generation
-        </button>
-      `;
-      document.getElementById('composer-stop-btn')?.addEventListener('click', () => {
-        if (activeAbortController) activeAbortController.abort();
-      });
-      return;
-    }
-
-    // Full Board Roundtable: Show session controls bar
+  function showSessionControls() {
     if (sessionControlsBar) {
       sessionControlsBar.classList.remove('hidden');
-      sessionControlsBar.classList.add('flex');
+      if (sessionPauseBtn) {
+        sessionPauseBtn.textContent = 'Pause after current speaker';
+        sessionPauseBtn.className = 'btn btn-ghost text-xs py-1 px-2.5 border border-subtle text-slate-300 hover:text-white hover:border-slate-400';
+      }
+      if (sessionProgressText) {
+        sessionProgressText.textContent = 'Convening roundtable...';
+      }
+      if (sessionProgressBar) {
+        sessionProgressBar.style.width = '8%';
+      }
     }
     if (actionsBar) {
       actionsBar.classList.add('hidden');
     }
-
-    if (sessionPauseBtn) {
-      sessionPauseBtn.textContent = 'Pause after current speaker';
-      sessionPauseBtn.onclick = () => {
-        sessionControl.pauseAfterCurrent = !sessionControl.pauseAfterCurrent;
-        sessionPauseBtn.textContent = sessionControl.pauseAfterCurrent ? '▶ Resume Session' : 'Pause after current speaker';
-        if (sessionControl.pauseAfterCurrent) {
-          sessionPauseBtn.className = 'btn text-xs py-1 px-2.5 bg-brass text-base font-bold shadow-sm';
-        } else {
-          sessionPauseBtn.className = 'btn btn-ghost text-xs py-1 px-2.5 border border-subtle text-slate-300 hover:text-white hover:border-slate-400';
-        }
-      };
-    }
-
-    if (sessionSkipChairBtn) {
-      sessionSkipChairBtn.onclick = () => {
-        sessionControl.skipToChair = true;
-        if (sessionProgressText) sessionProgressText.textContent = 'Advancing directly to The Chair Round Summary...';
-      };
-    }
-
-    if (sessionStopBtn) {
-      sessionStopBtn.onclick = () => {
-        sessionControl.isStopped = true;
-        if (activeAbortController) activeAbortController.abort();
-      };
-    }
+    renderRoomParticipantsSheet();
   }
 
-  function restoreSendButton() {
+  function hideSessionControls() {
     if (sessionControlsBar) {
       sessionControlsBar.classList.add('hidden');
-      sessionControlsBar.classList.remove('flex');
     }
     if (actionsBar) {
       actionsBar.classList.remove('hidden');
-      actionsBar.innerHTML = `
-        <span class="text-[10px] text-faint font-mono" id="composer-footer-hint">
-          ${activeMode === 'single' ? `1:1 Consultation with ${targetAgent.name} · Real-time streaming` : 'Multi-agent sequential deliberation · Quorum active'}
-        </span>
-        <div class="flex items-center gap-2">
-          <button id="composer-send-btn" class="btn btn-primary text-xs py-1.5 px-4">
-            <span>${activeMode === 'single' ? `Send to ${targetAgent.name}` : 'Send to Board'}</span>
-            <svg class="w-3.5 h-3.5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-          </button>
-        </div>
-      `;
-      // The rebuild above replaced the DOM nodes, so re-query the cached refs
-      // before wiring, otherwise we hold detached nodes and the label/hint freeze.
-      sendBtn = document.getElementById('composer-send-btn');
-      composerFooterHint = document.getElementById('composer-footer-hint');
-      sendBtn?.addEventListener('click', () => {
-        if (!isGenerating) triggerSend();
-      });
     }
+  }
+
+  // Set up Stop button logic (1:1 mode or individual actions)
+  function showStopButton(customLabel = null) {
+    if (!actionsBar) return;
+    actionsBar.classList.remove('hidden');
+    actionsBar.innerHTML = `
+      <div class="flex items-center gap-2 text-xs text-brass-light font-mono">
+        <span class="w-2 h-2 rounded-full bg-brass animate-ping"></span>
+        <span>${customLabel || (activeMode === 'single' ? `${targetAgent.name} is streaming...` : 'Deliberation in session...')}</span>
+      </div>
+      <button id="composer-stop-btn" class="btn bg-danger/20 hover:bg-danger/30 text-danger border border-danger/40 text-xs py-1.5 px-4 font-semibold">
+        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect x="6" y="6" width="12" height="12" stroke-width="2" rx="1" />
+        </svg>
+        Stop Generation
+      </button>
+    `;
+
+    document.getElementById('composer-stop-btn')?.addEventListener('click', () => {
+      if (activeAbortController) {
+        activeAbortController.abort();
+      }
+    });
+  }
+
+  function restoreSendButton() {
+    if (!actionsBar) return;
+    actionsBar.classList.remove('hidden');
+    actionsBar.innerHTML = `
+      <span class="text-[10px] text-faint font-mono" id="composer-footer-hint">
+        ${activeMode === 'single' ? `1:1 Consultation with ${targetAgent.name} · Real-time streaming` : 'Multi-agent sequential deliberation · Quorum active'}
+      </span>
+      <div class="flex items-center gap-2">
+        <button id="composer-send-btn" class="btn btn-primary text-xs py-1.5 px-4">
+          <span>${activeMode === 'single' ? `Send to ${targetAgent.name}` : 'Send to Board'}</span>
+          <svg class="w-3.5 h-3.5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </button>
+      </div>
+    `;
+
+    document.getElementById('composer-send-btn')?.addEventListener('click', () => {
+      if (!isGenerating) triggerSend();
+    });
+    renderRoomParticipantsSheet();
   }
 
   function setAgentSpeakingState(agentId, isSpeaking) {
@@ -1487,6 +1534,11 @@ function wireBoardroomChamber({
     const text = textToOverride !== null ? textToOverride : textarea.value.trim();
     if (!text) return;
 
+    const selectedParticipants = roomParticipants.filter(p => p.enabled !== false);
+    if (activeMode === 'all' && selectedParticipants.length === 0) {
+      return;
+    }
+
     lastUserText = text;
 
     if (textarea) {
@@ -1495,11 +1547,8 @@ function wireBoardroomChamber({
       textarea.disabled = true;
     }
     isGenerating = true;
-
-    showInSessionUI(activeMode === 'single');
     activeAbortController = new AbortController();
 
-    // Reset control state
     sessionControl.pauseAfterCurrent = false;
     sessionControl.isStopped = false;
     sessionControl.skipToChair = false;
@@ -1508,6 +1557,7 @@ function wireBoardroomChamber({
     document.querySelector('.inline-error-bubble')?.remove();
 
     if (activeMode === 'single') {
+      showStopButton();
       // 1:1 Single-Agent Execution
       try {
         await singleAgentChat({
@@ -1537,15 +1587,14 @@ function wireBoardroomChamber({
         finishTurn();
       }
     } else {
-      // Full-Board Deliberation
+      // Full-Board Sequenced Roundtable
+      showSessionControls();
       try {
-        const activeParticipants = roomParticipants.filter(p => p.enabled !== false);
-
         await conveneDeliberationRound({
           venture,
           phase: currentPhase,
           text,
-          participants: activeParticipants,
+          participants: selectedParticipants,
           session: activeSession,
           sessionControl,
           signal: activeAbortController.signal,
@@ -1554,9 +1603,21 @@ function wireBoardroomChamber({
           },
           onProgress: ({ current, total, agentName, isChairSummary }) => {
             if (sessionProgressText) {
-              sessionProgressText.textContent = isChairSummary
-                ? 'The Chair is delivering executive Round Summary...'
-                : `Speaker ${current} of ${total} · ${agentName} speaking...`;
+              if (isChairSummary) {
+                sessionProgressText.textContent = `${total} of ${total} spoke · The Chair formulating summary...`;
+              } else {
+                const spokeCount = Math.max(0, current - 1);
+                sessionProgressText.textContent = `${spokeCount} of ${total} spoke · ${agentName} speaking...`;
+              }
+            }
+            if (sessionProgressBar) {
+              const pct = isChairSummary ? 100 : Math.max(10, Math.round((current / Math.max(1, total)) * 90));
+              sessionProgressBar.style.width = `${pct}%`;
+            }
+          },
+          onPauseStateChange: (isPaused) => {
+            if (sessionProgressText && isPaused) {
+              sessionProgressText.textContent = 'Paused between speakers · Click Resume Session to continue';
             }
           },
           onAgentSpeakingChange: (agentId, isSpeaking) => {
@@ -1586,6 +1647,7 @@ function wireBoardroomChamber({
 
   function finishTurn() {
     isGenerating = false;
+    hideSessionControls();
     if (textarea) {
       textarea.disabled = false;
       textarea.focus();
@@ -1598,22 +1660,32 @@ function wireBoardroomChamber({
   function appendMessageBubble(msg) {
     if (!transcriptFeed) return;
 
-    // If the transcript is missing more than this single new message — e.g. the
-    // founder's turn that was just persisted alongside this agent placeholder — do a
-    // full re-render so no message is silently skipped. (Incremental append is only
-    // safe when exactly one message is new.)
-    if ((activeSession.messages || []).length !== renderedCount + 1) {
+    // Replace empty state if still showing
+    if (document.getElementById('empty-state-box')) {
       renderFeed();
       return;
     }
 
-    const bubbleHtml = renderMessageBubble(msg, currentPhase);
-    transcriptFeed.insertAdjacentHTML('beforeend', bubbleHtml);
+    const msgs = activeSession.messages || [];
+    const idx = msgs.findIndex(m => m.id === msg.id);
+
+    // Ensure preceding founder message (e.g. in 1:1 thread) is in the DOM first
+    if (idx > 0) {
+      const prevMsg = msgs[idx - 1];
+      if (prevMsg && !document.getElementById(prevMsg.id)) {
+        transcriptFeed.insertAdjacentHTML('beforeend', renderMessageBubble(prevMsg, currentPhase));
+      }
+    }
+
+    if (!document.getElementById(msg.id)) {
+      const bubbleHtml = renderMessageBubble(msg, currentPhase);
+      transcriptFeed.insertAdjacentHTML('beforeend', bubbleHtml);
+    }
+
     transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
-    renderedCount = (activeSession.messages || []).length;
 
     if (messageCountBadge) {
-      messageCountBadge.textContent = `${activeSession.messages.length} remarks`;
+      messageCountBadge.textContent = `${msgs.length} remarks`;
     }
   }
 
@@ -1628,13 +1700,24 @@ function wireBoardroomChamber({
     }
   }
 
+  function updateChallengeBubble(msgId, fullText) {
+    const bubble = document.getElementById(msgId);
+    if (!bubble) return;
+
+    const challengeEl = bubble.querySelector('.challenge-content');
+    if (challengeEl) {
+      challengeEl.innerHTML = renderMarkdown(fullText);
+      transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+    }
+  }
+
   function finalizeMessageBubble(msg) {
     const bubble = document.getElementById(msg.id);
     if (bubble) {
-      const bodyEl = bubble.querySelector('.message-body');
-      if (bodyEl) {
-        bodyEl.innerHTML = renderMarkdown(msg.text || '');
-      }
+      bubble.outerHTML = renderMessageBubble(msg, currentPhase);
+    } else {
+      renderFeed();
+      return;
     }
     wireTranscriptActions();
   }
@@ -1674,19 +1757,11 @@ function wireBoardroomChamber({
     const retryBtn = transcriptFeed.querySelector('.retry-chat-btn');
     retryBtn?.addEventListener('click', () => {
       document.querySelector('.inline-error-bubble')?.remove();
-      // The failed attempt already persisted the founder turn (and possibly a partial
-      // agent reply). Drop those trailing messages so retrying re-runs the turn
-      // without duplicating the founder's message.
-      const msgs = activeSession.messages || [];
-      while (msgs.length && msgs[msgs.length - 1].role !== 'user') msgs.pop();
-      if (msgs.length && msgs[msgs.length - 1].role === 'user' && msgs[msgs.length - 1].text === originalText) {
-        msgs.pop();
-      }
       triggerSend(originalText);
     });
   }
 
-  // Wire message actions (Copy, Regenerate, Challenge, Retry, Cross-Ask, Promote, Round 2)
+  // Wire message actions (Challenge, Copy, Regenerate, Retry Speaker, Round 2, Cross-Ask, Promote)
   function wireTranscriptActions() {
     // Copy button
     const copyBtns = document.querySelectorAll('.msg-action-copy-btn');
@@ -1708,6 +1783,116 @@ function wireBoardroomChamber({
       };
     });
 
+    // Challenge button (David Okafor Validation Interrogation)
+    const challengeBtns = document.querySelectorAll('.msg-action-challenge-btn');
+    challengeBtns.forEach(btn => {
+      btn.onclick = async () => {
+        if (isGenerating) return;
+        const msgId = btn.getAttribute('data-msg-id');
+        const targetMsg = (activeSession.messages || []).find(m => m.id === msgId);
+        if (!targetMsg) return;
+
+        const agentName = btn.getAttribute('data-author') || targetMsg.author || 'Director';
+        const claimText = targetMsg.text || '';
+
+        isGenerating = true;
+        if (textarea) textarea.disabled = true;
+        showStopButton('David Okafor is interrogating claim...');
+        activeAbortController = new AbortController();
+        setAgentSpeakingState('david', true);
+
+        try {
+          await challengeClaimWithDavid({
+            venture,
+            phase: currentPhase,
+            messageId: msgId,
+            agentName,
+            claimText,
+            session: activeSession,
+            signal: activeAbortController.signal,
+            onStart: () => {
+              renderFeed();
+            },
+            onChunk: (_chId, fullText) => {
+              updateChallengeBubble(msgId, fullText);
+            },
+            onDone: () => {
+              renderFeed();
+            }
+          });
+        } catch (err) {
+          console.error('Challenge error:', err);
+          renderFeed();
+        } finally {
+          setAgentSpeakingState('david', false);
+          finishTurn();
+        }
+      };
+    });
+
+    // Per-speaker retry button (for errored directors in a round)
+    const retrySpeakerBtns = document.querySelectorAll('.msg-retry-speaker-btn');
+    retrySpeakerBtns.forEach(btn => {
+      btn.onclick = async () => {
+        if (isGenerating) return;
+        const msgId = btn.getAttribute('data-msg-id');
+        const targetMsg = (activeSession.messages || []).find(m => m.id === msgId);
+        if (!targetMsg) return;
+
+        isGenerating = true;
+        if (textarea) textarea.disabled = true;
+        showStopButton(`Retrying ${targetMsg.author || 'Director'}...`);
+        activeAbortController = new AbortController();
+        if (targetMsg.agentId) setAgentSpeakingState(targetMsg.agentId, true);
+
+        try {
+          await retrySpeakerInRound({
+            venture,
+            phase: currentPhase,
+            messageId: msgId,
+            session: activeSession,
+            signal: activeAbortController.signal,
+            onStart: () => {
+              renderFeed();
+            },
+            onChunk: (mId, fullChunkText) => {
+              updateMessageBubble(mId, fullChunkText);
+            },
+            onDone: (retriedMsg) => {
+              finalizeMessageBubble(retriedMsg);
+            }
+          });
+        } catch (err) {
+          console.error('Retry speaker error:', err);
+          renderFeed();
+        } finally {
+          if (targetMsg.agentId) setAgentSpeakingState(targetMsg.agentId, false);
+          finishTurn();
+        }
+      };
+    });
+
+    // Round 2 Continuation button on Executive Round Summary
+    const roundTwoBtns = document.querySelectorAll('.round-two-btn');
+    roundTwoBtns.forEach(btn => {
+      btn.onclick = () => {
+        if (isGenerating) return;
+        if (activeMode !== 'all') {
+          activeMode = 'all';
+          updateModeUI();
+        }
+        if (textarea) {
+          if (!textarea.value.trim()) {
+            textarea.value = 'Round 2 follow-up: ';
+          }
+          textarea.style.height = 'auto';
+          textarea.style.height = Math.min(textarea.scrollHeight, 180) + 'px';
+          textarea.focus();
+          textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      };
+    });
+
     // Regenerate button
     const regenBtns = document.querySelectorAll('.msg-action-regen-btn');
     regenBtns.forEach(btn => {
@@ -1717,7 +1902,7 @@ function wireBoardroomChamber({
 
         isGenerating = true;
         if (textarea) textarea.disabled = true;
-        showInSessionUI(true);
+        showStopButton();
         activeAbortController = new AbortController();
 
         try {
@@ -1741,96 +1926,11 @@ function wireBoardroomChamber({
       };
     });
 
-    // Challenge with David Okafor
-    const challengeBtns = document.querySelectorAll('.msg-action-challenge-btn');
-    challengeBtns.forEach(btn => {
-      btn.onclick = async () => {
-        if (isGenerating) return;
-        const msgId = btn.getAttribute('data-msg-id');
-        const agentName = btn.getAttribute('data-author') || 'Director';
-        const targetMsg = (activeSession.messages || []).find(m => m.id === msgId);
-        if (!targetMsg) return;
-
-        // Use selected text or first 200 characters of statement
-        const selected = window.getSelection()?.toString().trim();
-        const claimText = selected && selected.length > 10 ? selected : (targetMsg.text?.slice(0, 180) || '');
-
-        isGenerating = true;
-        if (textarea) textarea.disabled = true;
-        showInSessionUI(true);
-        activeAbortController = new AbortController();
-
-        try {
-          await challengeClaimWithDavid({
-            venture,
-            phase: currentPhase,
-            messageId: msgId,
-            agentName,
-            claimText,
-            session: activeSession,
-            signal: activeAbortController.signal,
-            onStart: () => renderFeed(),
-            onChunk: () => renderFeed(),
-            onDone: () => renderFeed()
-          });
-        } catch (err) {
-          console.error('Challenge error:', err);
-        } finally {
-          finishTurn();
-        }
-      };
-    });
-
-    // Round 2 Continuation button
-    const roundTwoBtns = document.querySelectorAll('.round-two-btn');
-    roundTwoBtns.forEach(btn => {
-      btn.onclick = () => {
-        activeMode = 'all';
-        updateModeUI();
-        if (textarea) {
-          textarea.value = `Addressing the Chair's next action and board consensus in Round 1: `;
-          textarea.style.height = 'auto';
-          textarea.style.height = Math.min(textarea.scrollHeight, 180) + 'px';
-          textarea.focus();
-          textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      };
-    });
-
-    // Per-Speaker Retry button
-    const retrySpeakerBtns = document.querySelectorAll('.msg-retry-speaker-btn');
-    retrySpeakerBtns.forEach(btn => {
-      btn.onclick = async () => {
-        if (isGenerating) return;
-        const msgId = btn.getAttribute('data-msg-id');
-        isGenerating = true;
-        if (textarea) textarea.disabled = true;
-        showInSessionUI(true);
-        activeAbortController = new AbortController();
-
-        try {
-          await retrySpeakerInRound({
-            venture,
-            phase: currentPhase,
-            messageId: msgId,
-            session: activeSession,
-            signal: activeAbortController.signal,
-            onStart: () => renderFeed(),
-            onChunk: () => renderFeed(),
-            onDone: () => renderFeed()
-          });
-        } catch (err) {
-          console.error('Retry speaker error:', err);
-        } finally {
-          finishTurn();
-        }
-      };
-    });
-
     // Ask another member about this button
     const crossAskBtns = document.querySelectorAll('.msg-action-cross-ask-btn');
     crossAskBtns.forEach(btn => {
       btn.onclick = () => {
+        if (isGenerating) return;
         const msgId = btn.getAttribute('data-msg-id');
         const targetMsg = (activeSession.messages || []).find(m => m.id === msgId);
         const bubble = document.getElementById(msgId);
@@ -1839,7 +1939,7 @@ function wireBoardroomChamber({
         const excerpt = rawText.slice(0, 100).replace(/\s+/g, ' ').trim();
 
         // Switch to next active member
-        const otherAgents = phaseAgents.filter(a => a.id !== targetAgentId);
+        const otherAgents = phaseAgents.filter(a => a.id !== (targetMsg?.agentId || targetAgentId));
         const nextAgent = otherAgents[0] || phaseAgents[0];
 
         activeMode = 'single';
@@ -1971,25 +2071,8 @@ function wireSynthesisTriggers(venture, currentPhase, activeSession) {
       window.dispatchEvent(new CustomEvent('boardroom:sync'));
 
     } catch (err) {
-      if (err.name === 'AbortError') {
-        // The founder stopped synthesis; the Stop button already closed the modal.
-        return;
-      }
-      console.error('Synthesis failed:', err);
-      // Surface the failure instead of leaving the modal stuck on "Synthesizing".
-      if (streamIndicator) streamIndicator.classList.add('hidden');
-      if (statusChip) {
-        statusChip.textContent = '✕ Synthesis Failed';
-        statusChip.className = 'chip text-[10px] py-0 px-2 bg-danger/20 text-danger border-danger/40 uppercase font-mono';
-      }
-      if (stopBtn) stopBtn.classList.add('hidden');
-      if (doneBtn) doneBtn.classList.remove('hidden');
-      if (streamContent) {
-        streamContent.innerHTML += `
-          <div class="mt-3 p-3 rounded-lg border border-danger/40 bg-danger/5 text-xs text-danger leading-relaxed">
-            Synthesis failed: ${escapeHtml(err.message || 'Unknown error')}. The milestone was not ratified — you can retry.
-          </div>
-        `;
+      if (err.name !== 'AbortError') {
+        console.error('Synthesis failed:', err);
       }
     }
   }

@@ -204,9 +204,6 @@ export async function regenerateLastAgentReply({
     }
   }
 
-  const previousReplyIdx = lastAgentIdx;
-  const previousReply = lastAgentIdx !== -1 ? msgs[lastAgentIdx] : null;
-
   if (lastAgentIdx !== -1) {
     msgs.splice(lastAgentIdx, 1);
   }
@@ -272,11 +269,7 @@ export async function regenerateLastAgentReply({
       if (onChunk) onChunk(agentMsg.id, agentMsg.text);
     } else {
       if (!agentMsg.text) {
-        // Roll back the empty placeholder and restore the previous reply so a failed
-        // regeneration never destroys the existing answer.
-        const placeholderIdx = session.messages.indexOf(agentMsg);
-        if (placeholderIdx !== -1) session.messages.splice(placeholderIdx, 1);
-        if (previousReply) session.messages.splice(previousReplyIdx, 0, previousReply);
+        session.messages.pop();
         await put('sessions', session);
       }
       if (onAgentSpeakingChange) onAgentSpeakingChange(agent.id, false);
@@ -322,6 +315,7 @@ export async function conveneDeliberationRound({
   onSpeakerError,
   onAgentSpeakingChange,
   onProgress,
+  onPauseStateChange,
   signal
 }) {
   // 1. Identify which agents will participate and speaking order
@@ -339,7 +333,9 @@ export async function conveneDeliberationRound({
 
   if (activeParticipants.length === 0) {
     const allowedIds = PHASE_AGENTS[phase.id] || ['maya', 'sam', 'david'];
-    activeParticipants = roster.filter(a => a.enabled && allowedIds.includes(a.id));
+    activeParticipants = roster
+      .filter(a => a.enabled && allowedIds.includes(a.id))
+      .sort((a, b) => allowedIds.indexOf(a.id) - allowedIds.indexOf(b.id));
   }
 
   // 2. Initialize Round Record
@@ -391,8 +387,16 @@ export async function conveneDeliberationRound({
     }
 
     // Handle "Pause after current speaker"
+    let wasPaused = false;
     while (sessionControl?.pauseAfterCurrent && !sessionControl?.isStopped && !signal?.aborted && !sessionControl?.skipToChair) {
+      if (!wasPaused) {
+        wasPaused = true;
+        if (onPauseStateChange) onPauseStateChange(true);
+      }
       await new Promise(r => setTimeout(r, 200));
+    }
+    if (wasPaused && onPauseStateChange) {
+      onPauseStateChange(false);
     }
 
     if (signal?.aborted || sessionControl?.isStopped) {
@@ -892,33 +896,22 @@ export async function synthesizePhaseDeliverable({
     }
   } catch (err) {
     if (err.name === 'AbortError' || signal?.aborted) {
-      // The founder stopped synthesis. Do NOT ratify the milestone or persist a
-      // partial deliverable — leave the venture state exactly as it was.
-      throw new DOMException('Synthesis stopped by user', 'AbortError');
+      if (!fullContent) {
+        fullContent = '# Synthesis Interrupted\n\nThe Chair synthesis was stopped before completion.';
+      }
+    } else {
+      console.error('Synthesis error:', err);
+      fullContent += `\n\n*[Synthesis error: ${err.message}]*`;
     }
-    // Provider/network failure: surface it and leave venture state untouched so a
-    // failed synthesis can never mark the phase complete or pollute board memory.
-    console.error('Synthesis error:', err);
-    throw err;
   }
-
-  if (!fullContent.trim()) {
-    throw new Error('Synthesis produced no content; the milestone was not ratified.');
-  }
-
-  // Upsert: re-synthesizing the same phase must replace the existing memo rather
-  // than accumulate duplicate deliverable records.
-  const existingDeliverables = await getAll('deliverables');
-  const existing = existingDeliverables.find(d => d.ventureId === venture.id && d.phase === phase.id);
 
   const deliverable = {
-    id: existing?.id || `deliv_${venture.id}_${phase.id}_${Date.now()}`,
+    id: `deliv_${venture.id}_${phase.id}_${Date.now()}`,
     ventureId: venture.id,
     phase: phase.id,
     title: `${targetDeliverable} — ${venture.name}`,
     content: fullContent,
-    createdAt: existing?.createdAt || Date.now(),
-    updatedAt: Date.now()
+    createdAt: Date.now()
   };
 
   await put('deliverables', deliverable);
@@ -928,13 +921,9 @@ export async function synthesizePhaseDeliverable({
     venture.completedPhases.push(phase.id);
   }
 
-  const memoryMarker = `[Phase 0${phase.number}: ${phase.label} Milestone Concluded]`;
-  const memoryStamp = `${memoryMarker}\nDeliverable: ${targetDeliverable}.\nBoard consensus reached on core stage-gate criteria. Actionable directives logged for founder execution.`;
+  const memoryStamp = `[Phase 0${phase.number}: ${phase.label} Milestone Concluded]\nDeliverable: ${targetDeliverable}.\nBoard consensus reached on core stage-gate criteria. Actionable directives logged for founder execution.`;
   if (venture.boardMemory && venture.boardMemory.trim()) {
-    // Guard against stamping the same phase milestone into board memory twice.
-    if (!venture.boardMemory.includes(memoryMarker)) {
-      venture.boardMemory = `${venture.boardMemory.trim()}\n\n${memoryStamp}`;
-    }
+    venture.boardMemory = `${venture.boardMemory.trim()}\n\n${memoryStamp}`;
   } else {
     venture.boardMemory = memoryStamp;
   }
