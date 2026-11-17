@@ -114,10 +114,13 @@ ${transcriptBlock}`;
 function createPromptRules(roleTitle, voiceGuidance, endPrompt) {
   return `=== HARD OUTPUT INSTRUCTIONS ===
 1. You are ${roleTitle}. Stay strictly in character with your distinctive tone: ${voiceGuidance}.
-2. Be direct, dense, and executive-ready. Maximize information density per sentence. Zero conversational pleasantries, zero polite preambles (e.g. do not say "Great idea", "I agree with Maya", or "As the CFO...").
-3. Attack the specific inflection point of the current phase. Cite specifics from the venture dossier and address recent points raised in the transcript.
-4. Format using clear paragraphs or concise bullet points.
-5. ${endPrompt}`;
+2. THIS IS A LIVE SOCRATIC DIALOGUE with the founder — a back-and-forth, never a one-shot report. The deliberation record above contains the founder's earlier answers. If the founder has already answered you, OPEN by directly engaging that answer (quote or paraphrase it) and state how it confirms, shifts, or threatens your position. Never simply restate a point you already made — every turn must move the dialogue forward.
+3. Be direct, dense, and executive-ready. Maximize information density per sentence. Zero conversational pleasantries, zero polite preambles (e.g. do not say "Great idea", "I agree with Maya", or "As the CFO...").
+4. Attack the specific inflection point of the current phase. Cite specifics from the venture dossier and address recent points raised in the record.
+5. Format using clear paragraphs or concise bullet points.
+6. Do NOT deliver a final verdict, a complete plan, or the phase deliverable — The Chair synthesizes the deliverable only once the dialogue has converged. Your job each turn is to advance the founder's thinking by one decisive step.
+7. ${endPrompt}
+8. Hand the floor back to the founder explicitly — make clear you are waiting on their answer before you can go further. Keep it to 1–2 questions maximum.`;
 }
 
 /**
@@ -375,12 +378,13 @@ export function buildChairRoundSummaryPrompt({ venture, phase, founderPrompt, tr
 
   return `You are The Chair (Chief of Staff & Board Chair) of the Board of Directors.
 The sequential multi-agent roundtable for this round has concluded.
+This is a LIVE SOCRATIC DIALOGUE: the founder is in the room and will answer you. The round summary is a checkpoint that hands the floor back to the founder — never a closing verdict.
 
 ${context}
 ${prior}
 
 === YOUR MANDATE AS THE CHAIR ===
-Synthesize the directors' deliberation into a crisp, authoritative executive "Round summary" addressing the founder's prompt: "${founderPrompt}".
+Synthesize the directors' deliberation into a crisp, authoritative executive "Round summary" addressing the founder's prompt: "${founderPrompt}". If the founder answered questions in the record, acknowledge those answers before summarizing.
 
 Structure your output EXACTLY as follows:
 
@@ -395,8 +399,14 @@ Structure your output EXACTLY as follows:
 1. **[Divergence 1 Headline]**: [Contrast the opposing director viewpoints by name]
 2. **[Divergence 2 Headline]**: [Contrast the opposing director viewpoints by name]
 
-#### Single Most Important Next Action:
-[One unambiguous, high-leverage 14-day operational milestone or falsification test for the founder]`;
+#### Single Most Important Next Action (Proposed):
+[One unambiguous, high-leverage 14-day operational milestone or falsification test the board recommends once your questions are answered]
+
+#### Open Questions for the Founder:
+1. **[Question 1]**: [A specific, answerable question that resolves the sharpest disagreement between the directors]
+2. **[Question 2]**: [A specific, answerable question that unblocks the next stage-gate milestone]
+
+The board now awaits your answers. Reply directly to continue the deliberation — The Chair drafts the official deliverable only once the dialogue has converged. Do not close the session.`;
 }
 
 /**
