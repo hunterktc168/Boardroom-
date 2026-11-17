@@ -638,6 +638,12 @@ function renderBoardroomTab({
               </div>
             </div>
 
+            <!-- Awaiting Founder Reply Banner (Socratic dialogue hand-back) -->
+            <div id="awaiting-founder-banner" class="hidden items-center gap-2 px-3 py-2 rounded-lg bg-brass/10 border border-brass/40 text-[11px] text-brass-light font-mono animate-fadeIn">
+              <span class="w-2 h-2 rounded-full bg-brass animate-pulse shrink-0"></span>
+              <span id="awaiting-founder-text">The board has questions for you — reply to continue the dialogue.</span>
+            </div>
+
             <!-- Auto-growing Textarea -->
             <div class="relative">
               <textarea 
@@ -1373,6 +1379,7 @@ function wireBoardroomChamber({
   async function switchThread(agentScope) {
     activeSession = await getThreadSession(venture.id, currentPhase.id, agentScope);
     renderFeed();
+    markAwaitingFounder();
   }
 
   // Render Transcript Feed
@@ -1540,6 +1547,7 @@ function wireBoardroomChamber({
     }
 
     lastUserText = text;
+    setAwaitingFounder(false);
 
     if (textarea) {
       textarea.value = '';
@@ -1654,7 +1662,61 @@ function wireBoardroomChamber({
     }
     restoreSendButton();
     wireTranscriptActions();
+    markAwaitingFounder();
     window.dispatchEvent(new CustomEvent('boardroom:sync'));
+  }
+
+  /**
+   * Toggle the "board is awaiting your reply" banner.
+   */
+  function setAwaitingFounder(show, customText = '') {
+    const banner = document.getElementById('awaiting-founder-banner');
+    const label = document.getElementById('awaiting-founder-text');
+    if (!banner) return;
+    if (label && customText) label.textContent = customText;
+    if (show) {
+      banner.classList.remove('hidden');
+      banner.classList.add('flex');
+    } else {
+      banner.classList.add('hidden');
+      banner.classList.remove('flex');
+    }
+  }
+
+  /**
+   * Show the hand-back prompt when the board has spoken since the founder's last message,
+   * so the founder knows the floor has returned to them (the Socratic turn).
+   */
+  function markAwaitingFounder() {
+    if (isGenerating) return;
+
+    const msgs = activeSession.messages || [];
+    if (msgs.length === 0) {
+      setAwaitingFounder(false);
+      return;
+    }
+
+    let lastFounderIdx = -1;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user' || msgs[i].author === 'Founder') {
+        lastFounderIdx = i;
+        break;
+      }
+    }
+
+    const boardReplied = lastFounderIdx !== -1 && msgs.length - 1 > lastFounderIdx;
+    if (!boardReplied) {
+      setAwaitingFounder(false);
+      return;
+    }
+
+    if (activeMode === 'single') {
+      setAwaitingFounder(true, `${targetAgent.name} is waiting on your answer — reply to go deeper.`);
+      if (textarea) textarea.placeholder = `Answer ${targetAgent.name} (${targetAgent.shortRole})...`;
+    } else {
+      setAwaitingFounder(true, 'The board has questions for you — reply to continue the dialogue.');
+      if (textarea) textarea.placeholder = "Answer the board's questions to continue the dialogue...";
+    }
   }
 
   function appendMessageBubble(msg) {
@@ -1982,6 +2044,9 @@ function wireBoardroomChamber({
       };
     });
   }
+
+  // Reflect any existing "board awaiting founder" state on initial load
+  markAwaitingFounder();
 }
 
 /**

@@ -82,6 +82,7 @@ export async function singleAgentChat({
   };
 
   session.messages = session.messages || [];
+  const priorFounderTurns = session.messages.filter(m => m.role === 'user' || m.author === 'Founder').length;
   session.messages.push(userMsg);
   session.updatedAt = Date.now();
   await put('sessions', session);
@@ -132,7 +133,9 @@ export async function singleAgentChat({
         action: 'chat',
         venture,
         phase: phase.label,
-        founderText: text
+        founderText: text,
+        founderTurnCount: priorFounderTurns,
+        founderAnswer: text
       }
     });
 
@@ -352,6 +355,7 @@ export async function conveneDeliberationRound({
   };
 
   session.messages = session.messages || [];
+  const priorFounderTurns = session.messages.filter(m => m.role === 'user' || m.author === 'Founder').length;
   session.messages.push(userMsg);
 
   session.rounds = session.rounds || [];
@@ -474,6 +478,8 @@ export async function conveneDeliberationRound({
           venture,
           phase: phase.label,
           founderText: text,
+          founderTurnCount: priorFounderTurns,
+          founderAnswer: text,
           priorSpeakers: priorAgentReplies.map(p => p.agentName)
         }
       });
@@ -608,7 +614,9 @@ export async function conveneDeliberationRound({
           action: 'round_summary',
           venture,
           phase: phase.label,
-          founderText: text
+          founderText: text,
+          founderTurnCount: priorFounderTurns,
+          founderAnswer: text
         }
       });
 

@@ -114,7 +114,124 @@ async function* parseSSEStream(response, onDataChunk, signal) {
 /**
  * PROVIDER 1: Mock Provider (Default)
  * 100% Offline, deterministic, persona-aware, echoes venture/phase/last message
+ *
+ * Dialogue-aware: on the founder's first turn each persona delivers its opening
+ * analysis; on every subsequent turn it reacts to the founder's *latest answer*
+ * and escalates with the next Socratic question — producing a real back-and-forth
+ * between the founder and the board while fully offline.
  */
+
+/**
+ * Per-persona Socratic dialogue ladders. Indexed by founder turn (0-based).
+ * Each element pairs a reaction to the founder's answer with the next probing question.
+ */
+const SOCRATIC_LADDERS = {
+  maya: {
+    header: 'Chief Innovation Officer — Maya Chen',
+    framings: [
+      'That answer points at a genuinely non-consensus angle — most operators would instinctively dismiss it as too narrow.',
+      'What you just described is a behavioural shift, not a feature gap. That is exactly where the asymmetric upside hides.',
+      'Good — that gives us a beachhead, but the analogy only holds if the trigger event repeats on its own.'
+    ],
+    questions: [
+      'Which adjacent market has already trained these customers to expect this behaviour, and how do we borrow that distribution instead of rebuilding it?',
+      'What is the one contrarian assumption here that, if you are right, makes the incumbents structurally unable to respond?',
+      'If we could serve only one job-to-be-done for the next 90 days, which one would make the rest of the wedge inevitable?'
+    ]
+  },
+  david: {
+    header: 'Validation Partner — David Okafor',
+    framings: [
+      'Noted — but that is still stated intent, not commitment, and the gap between the two is where ventures die.',
+      'That is closer to signal, yet the sample is too small and too friendly to trust.',
+      'Fine — you have a directional read. Now we need to prove it is not survivor bias in a flattering sample.'
+    ],
+    questions: [
+      'How many of those prospects have actually put money, calendar time, or technical access behind that statement in the last 14 days?',
+      'What is the exact number and price point at which you would declare this hypothesis falsified and kill the vector outright?',
+      'Which single assumption, if it were false, would collapse the whole thesis — and when exactly do we test it?'
+    ]
+  },
+  priya: {
+    header: 'COO / Strategy — Priya Raman',
+    framings: [
+      'That is a real operating constraint, which is useful — constraints are where moats are built.',
+      'Good. That tells me where the delivery model breaks before scale exposes it.',
+      'Understood — that shifts the bottleneck from demand to throughput, which changes the sequencing entirely.'
+    ],
+    questions: [
+      'What is the single operational dependency that breaks first if transaction volume grows 5x next quarter?',
+      'If you had to standardise onboarding down to 48 hours, which bespoke step survives and which do we delete immediately?',
+      'What proprietary data does each completed transaction generate that a competitor cannot copy?'
+    ]
+  },
+  marcus: {
+    header: 'Chief Marketing Officer — Marcus Webb',
+    framings: [
+      'That is sharper, but it is still a segment — not yet a wedge that converts on its own.',
+      'Good — that narrows the ICP. Now the question is whether the channel can reach them without paid spend.',
+      'That narrative positions us against the status quo. The risk is whether the antagonist is vivid enough to be shared.'
+    ],
+    questions: [
+      'What is the exact sentence on your landing page that makes this ICP forward it to their CFO unprompted?',
+      'Which single non-obvious channel can you test in the next 14 days for under $500 and still reach 50 qualified buyers?',
+      'Who is the named antagonist in your story — the bloated incumbent, the manual status quo, or the internal workaround?'
+    ]
+  },
+  elena: {
+    header: 'CFO — Elena Vasquez',
+    framings: [
+      'That number helps, but revenue is vanity — I need to see contribution margin, not bookings.',
+      'Good. Now let us stress-test it, because every one of these models quietly assumes free onboarding.',
+      'Understood — that changes the payback window, which is the only number that decides whether we can fund the next stage.'
+    ],
+    questions: [
+      'What is our marginal cost to service the hundredth customer versus the first — including support and compute?',
+      'If gross margin must clear 78%, which cost line has to be cut or automated before you hire anyone?',
+      'How many months of runway do you get if fully-loaded CAC payback slips from 8 to 14 months?'
+    ]
+  },
+  sam: {
+    header: 'Customer Advocate & Head of Product — Sam Torres',
+    framings: [
+      'That is honest, and honesty about friction is rare — but it also means our onboarding is leaking customers.',
+      'Good. That tells me the value moment is real; the problem is everything the user must do before they reach it.',
+      'Understood — so the question is no longer what to build, but what to remove so the aha lands faster.'
+    ],
+    questions: [
+      'Where exactly in the first four minutes do users pause, hesitate, or abandon the flow?',
+      'Which two features on the roadmap could we delete tomorrow without any paying customer noticing?',
+      'What is the one action a new user must complete to feel the product is working — and can we make it the very first thing they see?'
+    ]
+  },
+  chair: {
+    header: 'The Chair — Chief of Staff',
+    framings: [
+      'The board has registered your answer and the tone of the room has shifted.',
+      'That clarifies the founder position; the directors will now need to react to it.',
+      'Your answer resolves one dispute and opens another. Let us make that explicit.'
+    ],
+    questions: [
+      'Which single question from the board are you deliberately deferring, and why?',
+      'On which disagreement do you want the board to take a formal position before you commit resources?',
+      'What would have to be true for you to reverse the decision you are leaning toward?'
+    ]
+  },
+  director: {
+    header: 'Board Advisory',
+    framings: [
+      'That answer narrows the problem usefully.',
+      'Understood — that moves the discussion onto firmer ground.',
+      'That helps, but it also surfaces the next unresolved assumption.'
+    ],
+    questions: [
+      'What empirical evidence do you hold today that supports that answer?',
+      'Which assumption behind that answer is the most expensive if it turns out to be wrong?',
+      'What is the next concrete step you will take in the next seven days to de-risk it?'
+    ]
+  }
+};
+
 export class MockProvider {
   constructor(config = {}) {
     this.name = 'mock';
@@ -166,10 +283,16 @@ export class MockProvider {
       }
     }
 
-    return { ventureName, phase, lastUserMessage };
+    // Founder dialogue turn tracking (0 = opening message, 1+ = founder is answering)
+    const founderTurnCount = Number.isFinite(meta?.founderTurnCount)
+      ? meta.founderTurnCount
+      : 0;
+    const founderAnswer = (meta?.founderAnswer || lastUserMessage || '').trim();
+
+    return { ventureName, phase, lastUserMessage, founderTurnCount, founderAnswer };
   }
 
-  _generatePersonaResponse(agentId, { ventureName, phase, lastUserMessage }, meta = {}, system = '') {
+  _generatePersonaResponse(agentId, { ventureName, phase, lastUserMessage, founderTurnCount = 0, founderAnswer = '' }, meta = {}, system = '') {
     // 1. Validation Challenge Target (David interrogating another director's remark)
     if (meta?.action === 'challenge' || (system && system.includes('CLAIM UNDER INTERROGATION'))) {
       const claimText = meta?.claimText || meta?.challengedText || 'the stated assumption';
@@ -192,10 +315,14 @@ ${speaker}'s recommendation assumes market willingness without pricing customer 
     // 2. The Chair Round Summary (3 agreements, 2 disagreements, 1 next action)
     if (meta?.action === 'round_summary' || (system && system.includes('3 Biggest Points of Agreement'))) {
       const founderTopic = meta?.founderText || lastUserMessage || `${ventureName} Strategy`;
+      const roundAnswer = (meta?.founderAnswer || lastUserMessage || '').trim();
+      const answerAck = (meta?.founderTurnCount >= 1 && roundAnswer)
+        ? `\nThe board has registered your latest answer — *"${roundAnswer.slice(0, 120)}${roundAnswer.length > 120 ? '...' : ''}"*. It settles one dispute and sharpens another; both are reflected below.\n`
+        : '';
       return `### Round Summary — The Chair
 
 The board has concluded its sequenced roundtable on: *"${founderTopic.slice(0, 90)}${founderTopic.length > 90 ? '...' : ''}"*. 
-
+${answerAck}
 Here is the executive consensus, divergences, and immediate milestone directive:
 
 #### 3 Biggest Points of Agreement:
@@ -207,8 +334,22 @@ Here is the executive consensus, divergences, and immediate milestone directive:
 1. **Pacing vs. Contribution Margin Hurdle**: Tension remains between scaling early customer acquisition velocity versus waiting until unit economics achieve a verified gross margin floor.
 2. **High-Touch White-Glove Onboarding vs. Pure Self-Serve**: Debate between intensive manual client onboarding to guarantee pilot retention versus enforcing automated self-serve workflows.
 
-#### Single Most Important Next Action:
-Deploy a 14-day customer smoke test with binding pilot commitment thresholds and an explicit kill criterion before committing engineering velocity to secondary roadmap modules.`;
+#### Single Most Important Next Action (Proposed):
+Deploy a 14-day customer smoke test with binding pilot commitment thresholds and an explicit kill criterion before committing engineering velocity to secondary roadmap modules.
+
+#### Open Questions for the Founder:
+1. **Evidence before scale**: Which named prospect has committed non-refundable budget, calendar time, or technical access in the last 14 days — and at what price point?
+2. **Wedge vs. breadth**: Which single ICP segment do we serve exclusively for the next 90 days, and what do we explicitly say "no" to?
+
+The board now awaits your answers. Reply directly to continue the deliberation — The Chair drafts the official deliverable only once the dialogue has converged.`;
+    }
+
+    // 3. Socratic dialogue follow-up: the founder has already answered at least once.
+    // React to their latest answer and escalate with the next probing question rather than
+    // replaying the opening monologue — this is what creates the founder ↔ board back-and-forth.
+    const isDialogueAction = !meta?.action || meta.action === 'chat' || meta.action === 'deliberate';
+    if (isDialogueAction && founderTurnCount >= 1) {
+      return this._generateDialogueFollowUp(agentId, { ventureName, phase, founderAnswer, founderTurnCount }, meta);
     }
 
     // Dynamic Context Chaining Prefix
@@ -364,6 +505,38 @@ We recommend focusing all available bandwidth on resolving the highest-risk assu
 
 **Next Action Step:** Formulate two falsifiable customer commitment benchmarks and audit contribution margins on initial pilot accounts.`;
     }
+  }
+
+  /**
+   * Generate a dialogue-aware follow-up turn: react to the founder's latest answer and
+   * escalate with the next Socratic question. Keeps the founder ↔ board loop alive.
+   */
+  _generateDialogueFollowUp(agentId, { ventureName, phase, founderAnswer, founderTurnCount }, meta = {}) {
+    const ladder = SOCRATIC_LADDERS[agentId] || SOCRATIC_LADDERS.director;
+    const turnIndex = Math.max(0, (founderTurnCount || 1) - 1);
+    const framing = ladder.framings[Math.min(turnIndex, ladder.framings.length - 1)];
+    const question = ladder.questions[Math.min(turnIndex, ladder.questions.length - 1)];
+
+    const answer = (founderAnswer || '').trim();
+    const answerQuote = answer
+      ? `> **Your answer:** "${answer.slice(0, 220)}${answer.length > 220 ? '...' : ''}"\n\n`
+      : '';
+
+    const chainingPrefix = (meta?.priorSpeakers && meta.priorSpeakers.length > 0)
+      ? `*Building on what ${meta.priorSpeakers.join(' and ')} just argued:*\n\n`
+      : '';
+
+    const progressNote = turnIndex >= 1
+      ? `\n\n*We are ${turnIndex + 1} turns deep in this thread — I am tracking your answers, not restarting the briefing.*`
+      : '';
+
+    return `### ${ladder.header} — ${ventureName}
+
+${chainingPrefix}${answerQuote}${framing}
+
+${question}${progressNote}
+
+**Over to you, founder** — answer this and I will take the analysis one level deeper.`;
   }
 
   async *stream({ system, messages, signal, meta }) {
